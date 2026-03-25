@@ -30,13 +30,13 @@
   },
   "scripts": {
     "format": "prettier . --write",
+    "lint": "prettier . --check",
     "test": "brittle test/swift-codegen.test.js",
-    "test:cross-language": "brittle test/cross-language.test.js",
-    "lint": "prettier . --check && lunte"
+    "test:cross-language": "brittle test/cross-language.test.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/holepunchto/hrpc-swift.git"
+    "url": "git+https://github.com/holepunchto/hrpc-swift.git"
   },
   "author": "Holepunch",
   "license": "Apache-2.0",

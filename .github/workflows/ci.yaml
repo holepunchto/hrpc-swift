@@ -14,17 +14,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     name: Test / ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Use Node.js lts/*
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          registry-url: 'https://npm.pkg.github.com'
       - uses: swift-actions/setup-swift@v2
-      - run: git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf ssh://git@github.com/
-      - run: git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf git@github.com:
+        if: runner.os == 'Linux'
+      - name: Configure git for private deps
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
       - run: npm install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm test
       - run: npm run test:cross-language

@@ -3,7 +3,7 @@
 const { spawnSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
-const generateSwift = require('../../lib/swift-codegen')
+const generateSwift = require('../../lib/codegen')
 
 const WORKSPACE = path.join(__dirname, '../swift-workspace')
 const SOURCES = path.join(WORKSPACE, 'Sources')

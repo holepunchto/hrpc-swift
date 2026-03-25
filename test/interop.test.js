@@ -93,7 +93,7 @@ class Pipe: RPCDelegate {
 
 // --- JS → Swift tests ---
 
-test('cross-language: JS event frame → Swift dispatch', { skip: isWindows }, (t) => {
+test('interop: JS event frame → Swift dispatch', { skip: isWindows }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -135,7 +135,7 @@ RunLoop.main.run()
   t.ok(result.stdout.includes('OK'), 'JS event frame decoded by Swift')
 })
 
-test('cross-language: JS request frame → Swift dispatch + response', { skip: isWindows }, (t) => {
+test('interop: JS request frame → Swift dispatch + response', { skip: isWindows }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -194,7 +194,7 @@ RunLoop.main.run()
 
 // --- Swift → JS tests ---
 
-test('cross-language: Swift event frame → JS decode', { skip: isWindows }, (t) => {
+test('interop: Swift event frame → JS decode', { skip: isWindows }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -236,7 +236,7 @@ exit(0)
   t.is(payload.code, 77, 'Swift-encoded payload decoded in JS: code=77')
 })
 
-test('cross-language: Swift request frame → JS decode', { skip: isWindows }, (t) => {
+test('interop: Swift request frame → JS decode', { skip: isWindows }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [

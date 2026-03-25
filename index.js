@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 const HRPCBuilder = require('hrpc')
-const generateSwift = require('./lib/swift-codegen')
+const generateSwift = require('./lib/codegen')
 
 const BARE_RPC_SWIFT_URL = 'https://github.com/holepunchto/bare-rpc-swift'
 

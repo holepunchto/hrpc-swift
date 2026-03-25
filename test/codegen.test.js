@@ -5,7 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const SwiftHyperschema = require('hyperschema-swift')
-const generateSwift = require('../lib/swift-codegen')
+const generateSwift = require('../lib/codegen')
 const { runSwift } = require('./helpers/swift')
 
 const isWindows = process.platform === 'win32'

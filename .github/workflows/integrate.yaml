@@ -27,4 +27,4 @@ jobs:
       - uses: holepunchto/actions/node-base@v1
       - uses: swift-actions/setup-swift@v2
       - run: npm test
-      - run: npm run test:cross-language
+      - run: npm run test:interop

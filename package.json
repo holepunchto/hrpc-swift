@@ -31,8 +31,8 @@
   "scripts": {
     "format": "prettier . --write",
     "lint": "prettier . --check",
-    "test": "brittle test/swift-codegen.test.js",
-    "test:cross-language": "brittle test/cross-language.test.js"
+    "test": "brittle test/codegen.test.js",
+    "test:interop": "brittle test/interop.test.js"
   },
   "repository": {
     "type": "git",

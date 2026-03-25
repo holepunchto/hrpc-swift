@@ -14,11 +14,19 @@ jobs:
   test:
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    name: Test / ${{ matrix.platform }}
+    name: Test / ${{ matrix.os }}
     steps:
-      - uses: holepunchto/actions/bare-base@v1
+      - uses: actions/checkout@v3
+      - name: Use Node.js lts/*
+        uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+          registry-url: 'https://npm.pkg.github.com'
+      - uses: swift-actions/setup-swift@v2
+      - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm test
+      - run: npm run test:cross-language

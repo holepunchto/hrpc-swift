@@ -21,10 +21,6 @@ jobs:
           node-version: lts/*
       - uses: swift-actions/setup-swift@v2
         if: runner.os == 'Linux'
-      - name: Configure git for private deps
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
       - run: npm install
       - run: npm test
       - run: npm run test:cross-language

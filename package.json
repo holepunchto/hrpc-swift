@@ -23,7 +23,7 @@
     "bare-rpc": "^1.2.0",
     "brittle": "^3.19.0",
     "compact-encoding": "^2.0.0",
-    "hyperschema-swift": "https://github.com/holepunchto/hyperschema-swift",
+    "hyperschema-swift": "^0.0.0",
     "lunte": "^1.2.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0"

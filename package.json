@@ -38,7 +38,7 @@
     "type": "git",
     "url": "https://github.com/holepunchto/hrpc-swift.git"
   },
-  "author": "Holepunch Inc",
+  "author": "Holepunch",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/holepunchto/hrpc-swift/issues"

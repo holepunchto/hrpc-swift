@@ -21,6 +21,8 @@ jobs:
           node-version: lts/*
           registry-url: 'https://npm.pkg.github.com'
       - uses: swift-actions/setup-swift@v2
+      - run: git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf ssh://git@github.com/
+      - run: git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf git@github.com:
       - run: npm install
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

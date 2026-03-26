@@ -6,6 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const SwiftHyperschema = require('hyperschema-swift')
 const generateSwift = require('../lib/codegen')
+const writeToDisk = require('../lib/write')
 const { runSwift } = require('./helpers/swift')
 const { isWindows } = require('which-runtime')
 
@@ -285,8 +286,6 @@ test('throws for streaming response at codegen time', (t) => {
 })
 
 test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
-  const SwiftHRPC = require('../index')
-
   const tmpDir = await tmp(t, { dir: path.join(__dirname, 'test-storage') })
   const outDir = path.join(tmpDir, 'hrpc')
 
@@ -308,7 +307,7 @@ test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
     handlers: hrpcJson.schema
   }
 
-  SwiftHRPC._writeToDisk(fakeHrpc, outDir, {
+  writeToDisk(fakeHrpc, outDir, {
     schemaPackagePath: '../schema',
     schemaPackageName: 'Schema',
     schemaPackageId: 'schema'

@@ -15,6 +15,7 @@ function encodeRequestFrame(id, command, payloadBuffer) {
   return payloadBuffer ? Buffer.concat([header, payloadBuffer]) : Buffer.from(header)
 }
 
+// Events are request frames (type 1) with id 0
 function encodeEventFrame(command, payloadBuffer) {
   return encodeRequestFrame(0, command, payloadBuffer)
 }

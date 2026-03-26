@@ -4,44 +4,11 @@ const test = require('brittle')
 const tmp = require('test-tmp')
 const fs = require('fs')
 const path = require('path')
-const SwiftHyperschema = require('hyperschema-swift')
 const generateSwift = require('../lib/codegen')
 const writeToDisk = require('../lib/write')
 const { runSwift } = require('./helpers/swift')
+const { makeSchema, PIPE_CLASS } = require('./helpers/schema')
 const { isWindows } = require('which-runtime')
-
-// Shared schema setup: register types needed by the RPC handlers.
-function makeSchema() {
-  const schema = SwiftHyperschema.from(null)
-  const ns = schema.namespace('test')
-
-  ns.register({
-    name: 'echo-request',
-    fields: [{ name: 'value', type: 'uint', required: true }]
-  })
-
-  ns.register({
-    name: 'echo-response',
-    fields: [{ name: 'value', type: 'uint', required: true }]
-  })
-
-  ns.register({
-    name: 'notify-request',
-    fields: [{ name: 'code', type: 'uint', required: true }]
-  })
-
-  return schema
-}
-
-// Shared Pipe class that wires two HRPC instances back-to-back
-const PIPE_CLASS = `
-class Pipe: RPCDelegate {
-  var peer: HRPC?
-  func rpc(_ rpc: RPC, send data: Data) {
-    peer?.receive(data)
-  }
-}
-`
 
 test('swift: request/response roundtrip', { skip: isWindows }, (t) => {
   const schema = makeSchema()
@@ -322,6 +289,7 @@ test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
   t.ok(swift.includes('case 0:'), 'HRPC.swift has dispatch for command 0')
 
   const pkg = fs.readFileSync(path.join(outDir, 'Package.swift'), 'utf-8')
+  t.ok(pkg.includes('.library(name: "HRPC"'), 'Package.swift has library product')
   t.ok(pkg.includes('name: "HRPC"'), 'Package.swift has HRPC target')
   t.ok(pkg.includes('bare-rpc-swift'), 'Package.swift references bare-rpc-swift')
   t.ok(pkg.includes('../schema'), 'Package.swift uses schemaPackagePath')

@@ -16,17 +16,36 @@
     "index.d.ts",
     "lib/*.js"
   ],
+  "imports": {
+    "fs": {
+      "bare": "bare-fs",
+      "default": "fs"
+    },
+    "path": {
+      "bare": "bare-path",
+      "default": "path"
+    },
+    "child_process": {
+      "bare": "bare-subprocess",
+      "default": "child_process"
+    }
+  },
   "dependencies": {
     "hrpc": "^4.3.0"
   },
   "devDependencies": {
+    "bare-fs": "^4.5.6",
+    "bare-path": "^3.0.0",
     "bare-rpc": "^1.2.0",
+    "bare-subprocess": "^5.2.3",
     "brittle": "^3.19.0",
     "compact-encoding": "^2.0.0",
     "hyperschema-swift": "^0.0.0",
     "lunte": "^1.2.0",
     "prettier": "^3.6.2",
-    "prettier-config-holepunch": "^2.0.0"
+    "prettier-config-holepunch": "^2.0.0",
+    "test-tmp": "^1.4.0",
+    "which-runtime": "^1.3.2"
   },
   "scripts": {
     "format": "prettier . --write",

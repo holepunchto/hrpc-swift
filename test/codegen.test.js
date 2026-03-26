@@ -1,14 +1,13 @@
 'use strict'
 
 const test = require('brittle')
+const tmp = require('test-tmp')
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
 const SwiftHyperschema = require('hyperschema-swift')
 const generateSwift = require('../lib/codegen')
 const { runSwift } = require('./helpers/swift')
-
-const isWindows = process.platform === 'win32'
+const { isWindows } = require('which-runtime')
 
 // Shared schema setup: register types needed by the RPC handlers.
 function makeSchema() {
@@ -285,10 +284,10 @@ test('throws for streaming response at codegen time', (t) => {
   t.exception(() => generateSwift(hrpc), /streaming/i, 'throws for streaming response')
 })
 
-test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', (t) => {
+test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
   const SwiftHRPC = require('../index')
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hrpc-swift-test-'))
+  const tmpDir = await tmp(t, { dir: path.join(__dirname, 'test-storage') })
   const outDir = path.join(tmpDir, 'hrpc')
 
   const hrpcJson = {
@@ -331,6 +330,4 @@ test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', (t) => {
   const json = JSON.parse(fs.readFileSync(path.join(outDir, 'hrpc.json'), 'utf-8'))
   t.is(json.version, 1, 'hrpc.json has version')
   t.ok(Array.isArray(json.schema), 'hrpc.json has schema array')
-
-  fs.rmSync(tmpDir, { recursive: true })
 })

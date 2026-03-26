@@ -5,8 +5,7 @@ const c = require('compact-encoding')
 const SwiftHyperschema = require('hyperschema-swift')
 const { runSwift } = require('./helpers/swift')
 const m = require('bare-rpc/messages')
-
-const isWindows = process.platform === 'win32'
+const { isWindows } = require('which-runtime')
 
 // --- Wire format helpers ---
 

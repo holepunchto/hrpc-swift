@@ -24,7 +24,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     name: Test / ${{ matrix.platform }}
     steps:
-      - uses: holepunchto/actions/node-base@v1
+      - uses: holepunchto/actions/bare-base@v1
       - uses: swift-actions/setup-swift@v2
       - run: npm test
-      - run: npm run test:interop

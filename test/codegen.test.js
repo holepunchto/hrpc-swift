@@ -1,7 +1,6 @@
 'use strict'
 
 const test = require('brittle')
-const tmp = require('test-tmp')
 const fs = require('fs')
 const path = require('path')
 const generateSwift = require('../lib/codegen')
@@ -253,7 +252,7 @@ test('throws for streaming response at codegen time', (t) => {
 })
 
 test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
-  const tmpDir = await tmp(t, { dir: path.join(__dirname, 'test-storage') })
+  const tmpDir = await t.tmp()
   const outDir = path.join(tmpDir, 'hrpc')
 
   const hrpcJson = {

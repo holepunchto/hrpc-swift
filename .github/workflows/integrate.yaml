@@ -1,9 +1,11 @@
 name: Integrate
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -17,8 +19,11 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
+          - os: macos-latest
+            platform: darwin
     runs-on: ${{ matrix.os }}
     name: Test / ${{ matrix.platform }}
     steps:
       - uses: holepunchto/actions/bare-base@v1
+      - uses: swift-actions/setup-swift@v2
       - run: npm test

@@ -1,10 +1,10 @@
-# repo-template
+# hrpc-swift
 
-Template repository for creating packages
+Swift code generation for [HRPC](https://github.com/holepunchto/hrpc).
 
-## Usage
-
-tbd
+```
+npm i hrpc-swift
+```
 
 ## License
 

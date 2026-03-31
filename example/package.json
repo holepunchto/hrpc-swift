@@ -1,0 +1,8 @@
+{
+  "name": "hrpc-swift-example",
+  "private": true,
+  "dependencies": {
+    "hyperschema-swift": "https://github.com/holepunchto/hyperschema-swift#support-array-fields",
+    "hrpc-swift": "file:.."
+  }
+}

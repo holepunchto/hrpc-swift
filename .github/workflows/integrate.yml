@@ -25,5 +25,5 @@ jobs:
     name: Test / ${{ matrix.platform }}
     steps:
       - uses: holepunchto/actions/bare-base@v1
-      - uses: holepunchto/actions/swift-base@v1
+      - uses: holepunchto/actions/setup-swift@v1
       - run: npm test

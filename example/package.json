@@ -2,7 +2,7 @@
   "name": "hrpc-swift-example",
   "private": true,
   "dependencies": {
-    "hyperschema-swift": "https://github.com/holepunchto/hyperschema-swift#main",
-    "hrpc-swift": "file:.."
+    "hrpc-swift": "file:..",
+    "hyperschema-swift": "^0.1.1"
   }
 }

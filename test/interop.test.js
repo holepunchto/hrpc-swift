@@ -179,9 +179,12 @@ let pipe = Pipe()
 pipe.captureMode = true
 let hrpc = HRPC(delegate: pipe)
 
-try hrpc.notify(NotifyRequest(code: 77))
-print(pipe.captured.base64EncodedString())
-exit(0)
+Task {
+  try await hrpc.notify(NotifyRequest(code: 77))
+  print(pipe.captured.base64EncodedString())
+  exit(0)
+}
+RunLoop.main.run()
 `
 
   const result = runSwift(schema, hrpc, main)

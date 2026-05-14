@@ -309,6 +309,50 @@ RunLoop.main.run()
   t.ok(result.stdout.includes('OK'), 'nil args delivered to send-only handler')
 })
 
+test('swift: primitive type request/response roundtrip', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/double',
+        request: { name: 'uint', stream: false },
+        response: { name: 'uint', stream: false }
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onDouble { req in
+  return req! * 2
+}
+
+Task {
+  let resp = try await client.double(UInt(21))
+  precondition(resp == 42, "expected 42, got \\(resp)")
+  print("OK")
+  exit(0)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'primitive uint roundtrip printed OK')
+})
+
 // --- JS-level tests (no Swift compilation needed) ---
 
 test('uses delegate forwarder instead of closure wiring', (t) => {
@@ -340,6 +384,34 @@ test('uses delegate forwarder instead of closure wiring', (t) => {
   t.ok(swift.includes('didFailWith error: Error'), 'forwarder forwards didFailWith')
   t.ok(swift.includes('(EchoRequest?) async throws'), 'request handler takes optional arg')
   t.ok(swift.includes('(NotifyRequest?) async'), 'event handler takes optional arg')
+})
+
+test('primitive types use Primitive.Xxx() codecs', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/ping',
+        request: { name: 'uint', stream: false },
+        response: { name: 'string', stream: false }
+      },
+      {
+        id: 1,
+        name: '@test/flag',
+        request: { name: 'bool', stream: false, send: true },
+        response: null
+      }
+    ]
+  }
+
+  const swift = generateSwift(hrpc)
+  t.ok(swift.includes('Primitive.UInt()'), 'uint maps to Primitive.UInt()')
+  t.ok(swift.includes('Primitive.UTF8()'), 'string maps to Primitive.UTF8()')
+  t.ok(swift.includes('Primitive.Bool()'), 'bool maps to Primitive.Bool()')
+  t.ok(swift.includes('(_ args: UInt?'), 'uint request arg type is UInt?')
+  t.ok(swift.includes('-> String'), 'string response type is String')
+  t.ok(swift.includes('(_ args: Bool?'), 'bool send-only arg type is Bool?')
+  t.absent(swift.includes('Schema.'), 'no Schema. references for primitives')
 })
 
 test('throws for streaming request at codegen time', (t) => {

@@ -82,7 +82,7 @@ let pipe = Pipe()
 let hrpc = HRPC(delegate: pipe)
 
 hrpc.onNotify { req in
-  precondition(req.code == 42, "expected code 42, got \\(req.code)")
+  precondition(req!.code == 42, "expected code 42, got \\(req!.code)")
   print("OK")
   exit(0)
 }
@@ -125,8 +125,8 @@ pipe.captureMode = true
 let hrpc = HRPC(delegate: pipe)
 
 hrpc.onEcho { req in
-  precondition(req.value == 7, "expected value 7, got \\(req.value)")
-  return EchoResponse(value: req.value * 3)
+  precondition(req!.value == 7, "expected value 7, got \\(req!.value)")
+  return EchoResponse(value: req!.value * 3)
 }
 
 let data = Data(base64Encoded: "${base64}")!

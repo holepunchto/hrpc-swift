@@ -88,7 +88,7 @@ hrpc.onNotify { req in
 }
 
 let data = Data(base64Encoded: "${base64}")!
-hrpc.receive(data)
+Task { await hrpc.receive(data) }
 RunLoop.main.run()
 `
 
@@ -133,7 +133,7 @@ hrpc.onNotify { req in
 }
 
 let data = Data(base64Encoded: "${base64}")!
-hrpc.receive(data)
+Task { await hrpc.receive(data) }
 RunLoop.main.run()
 `
 
@@ -176,7 +176,7 @@ hrpc.onEcho { req in
 }
 
 let data = Data(base64Encoded: "${base64}")!
-hrpc.receive(data)
+Task { await hrpc.receive(data) }
 
 Task {
   try await Task.sleep(nanoseconds: 100_000_000)

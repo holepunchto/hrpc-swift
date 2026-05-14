@@ -353,6 +353,62 @@ RunLoop.main.run()
   t.ok(result.stdout.includes('OK'), 'primitive uint roundtrip printed OK')
 })
 
+test(
+  'swift: response-stream — server writes chunks, client reads all',
+  { skip: isWindows },
+  (t) => {
+    const schema = makeSchema()
+    const hrpc = {
+      handlers: [
+        {
+          id: 0,
+          name: '@test/feed',
+          request: { name: '@test/echo-request', stream: false },
+          response: { name: '@test/echo-response', stream: true }
+        }
+      ]
+    }
+
+    const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onFeed { req, stream in
+  for i: UInt in 0..<(req?.value ?? 0) {
+    await stream.write(encode(echoResponse, EchoResponse(value: i)))
+  }
+  await stream.end()
+}
+
+Task {
+  let responseStream = try await client.feed(EchoRequest(value: 3))
+  var collected: [UInt] = []
+  for try await chunk in responseStream {
+    let resp = try decode(echoResponse, chunk)
+    collected.append(resp.value)
+  }
+  precondition(collected == [0, 1, 2], "got \\(collected)")
+  print("OK")
+  exit(0)
+}
+RunLoop.main.run()
+`
+
+    const result = runSwift(schema, hrpc, main)
+    t.ok(result.ok, result.stderr)
+    t.ok(result.stdout.includes('OK'), 'response-stream test printed OK')
+  }
+)
+
 // --- JS-level tests (no Swift compilation needed) ---
 
 test('uses delegate forwarder instead of closure wiring', (t) => {
@@ -375,7 +431,7 @@ test('uses delegate forwarder instead of closure wiring', (t) => {
 
   const swift = generateSwift(hrpc)
   t.ok(swift.includes('_HRPCDelegateForwarder'), 'emits forwarder class')
-  t.ok(swift.includes('Task { await self._rpc.receive(data) }'), 'receive wraps in Task')
+  t.ok(swift.includes('public func receive(_ data: Data) async {'), 'receive is async')
   t.absent(swift.includes('onRequest ='), 'no closure wiring for requests')
   t.absent(swift.includes('onEvent ='), 'no closure wiring for events')
   t.ok(swift.includes('await req.reject('), 'dispatch uses await on reject')
@@ -428,18 +484,25 @@ test('throws for streaming request at codegen time', (t) => {
   t.exception(() => generateSwift(hrpc), /streaming/i, 'throws for streaming request')
 })
 
-test('throws for streaming response at codegen time', (t) => {
+test('response-stream: generates IncomingStream client method and command-ID set', (t) => {
   const hrpc = {
     handlers: [
       {
-        id: 0,
-        name: '@test/stream',
-        request: { name: '@test/stream-request', stream: false },
-        response: { name: '@test/stream-response', stream: true }
+        id: 2,
+        name: '@test/feed',
+        request: { name: '@test/echo-request', stream: false },
+        response: { name: '@test/echo-response', stream: true }
       }
     ]
   }
-  t.exception(() => generateSwift(hrpc), /streaming/i, 'throws for streaming response')
+  const swift = generateSwift(hrpc)
+  t.ok(
+    swift.includes('func feed(_ args: EchoRequest? = nil) async throws -> IncomingStream'),
+    'client method signature'
+  )
+  t.ok(swift.includes('(EchoRequest?, OutgoingStream) async throws -> Void'), 'server handler type')
+  t.ok(swift.includes('_responseStreamCommands'), 'emits routing set')
+  t.ok(swift.includes('requestWithResponseStream(command: 2'), 'uses correct command id')
 })
 
 test('throws for unsupported primitive type at codegen time', (t) => {

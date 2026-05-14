@@ -442,6 +442,55 @@ test('throws for streaming response at codegen time', (t) => {
   t.exception(() => generateSwift(hrpc), /streaming/i, 'throws for streaming response')
 })
 
+test('throws for unsupported primitive type at codegen time', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/ping',
+        request: { name: 'lexint', stream: false },
+        response: { name: 'uint', stream: false }
+      }
+    ]
+  }
+  t.exception(
+    () => generateSwift(hrpc),
+    /unsupported primitive type/i,
+    'throws for unknown bare type'
+  )
+})
+
+test('primitive-only schema omits import Schema', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/double',
+        request: { name: 'uint', stream: false },
+        response: { name: 'uint', stream: false }
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.absent(swift.includes('import Schema'), 'no import Schema for primitive-only schema')
+  t.ok(swift.includes('import CompactEncoding'), 'still imports CompactEncoding')
+})
+
+test('struct-type schema includes import Schema', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/echo',
+        request: { name: '@test/echo-request', stream: false },
+        response: { name: '@test/echo-response', stream: false }
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.ok(swift.includes('import Schema'), 'import Schema present when structs used')
+})
+
 test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
   const tmpDir = await t.tmp()
   const outDir = path.join(tmpDir, 'hrpc')

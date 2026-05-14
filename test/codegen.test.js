@@ -256,7 +256,7 @@ server.onEcho { req in
 }
 
 Task {
-  _ = try? await client.echo(nil)
+  _ = try await client.echo(nil)
 }
 RunLoop.main.run()
 `
@@ -264,6 +264,49 @@ RunLoop.main.run()
   const result = runSwift(schema, hrpc, main)
   t.ok(result.ok, result.stderr)
   t.ok(result.stdout.includes('OK'), 'nil args delivered to handler')
+})
+
+test('swift: null payload send-only delivers nil args to handler', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/notify',
+        request: { name: '@test/notify-request', stream: false, send: true },
+        response: null
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onNotify { req in
+  precondition(req == nil, "expected nil args, got \\(String(describing: req))")
+  print("OK")
+  exit(0)
+}
+
+Task {
+  try await client.notify(nil)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'nil args delivered to send-only handler')
 })
 
 // --- JS-level tests (no Swift compilation needed) ---

@@ -36,8 +36,8 @@ pipeA.peer = server
 pipeB.peer = client
 
 server.onEcho { req in
-  precondition(req.value == 21, "server got wrong value: \\(req.value)")
-  return EchoResponse(value: req.value * 2)
+  precondition(req!.value == 21, "server got wrong value: \\(req!.value)")
+  return EchoResponse(value: req!.value * 2)
 }
 
 Task {
@@ -81,7 +81,7 @@ pipeA.peer = server
 pipeB.peer = client
 
 server.onNotify { req in
-  precondition(req.code == 99, "server got wrong code: \\(req.code)")
+  precondition(req!.code == 99, "server got wrong code: \\(req!.code)")
   print("OK")
   exit(0)
 }
@@ -132,7 +132,7 @@ pipeB.peer = client
 var notifyReceived = false
 
 server.onEcho { req in
-  return EchoResponse(value: req.value + 1)
+  return EchoResponse(value: req!.value + 1)
 }
 
 server.onNotify { req in
@@ -185,7 +185,7 @@ pipeA.peer = server
 pipeB.peer = client
 
 server.onEcho { req in
-  return EchoResponse(value: req.value)
+  return EchoResponse(value: req!.value)
 }
 
 Task {
@@ -223,6 +223,92 @@ exit(0)
   t.ok(result.stdout.includes('OK'), 'zero handlers printed OK')
 })
 
+test('swift: null payload delivers nil args to handler', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/echo',
+        request: { name: '@test/echo-request', stream: false },
+        response: { name: '@test/echo-response', stream: false }
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onEcho { req in
+  precondition(req == nil, "expected nil args, got \\(String(describing: req))")
+  print("OK")
+  exit(0)
+}
+
+Task {
+  _ = try await client.echo(nil)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'nil args delivered to handler')
+})
+
+test('swift: null payload send-only delivers nil args to handler', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/notify',
+        request: { name: '@test/notify-request', stream: false, send: true },
+        response: null
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onNotify { req in
+  precondition(req == nil, "expected nil args, got \\(String(describing: req))")
+  print("OK")
+  exit(0)
+}
+
+Task {
+  try await client.notify(nil)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'nil args delivered to send-only handler')
+})
+
 // --- JS-level tests (no Swift compilation needed) ---
 
 test('uses delegate forwarder instead of closure wiring', (t) => {
@@ -252,6 +338,8 @@ test('uses delegate forwarder instead of closure wiring', (t) => {
   t.ok(swift.includes('await req.reply('), 'dispatch uses await on reply')
   t.ok(swift.includes('let transport: any RPCDelegate'), 'transport is a strong let')
   t.ok(swift.includes('didFailWith error: Error'), 'forwarder forwards didFailWith')
+  t.ok(swift.includes('(EchoRequest?) async throws'), 'request handler takes optional arg')
+  t.ok(swift.includes('(NotifyRequest?) async'), 'event handler takes optional arg')
 })
 
 test('throws for streaming request at codegen time', (t) => {

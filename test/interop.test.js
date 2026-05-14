@@ -82,7 +82,7 @@ let pipe = Pipe()
 let hrpc = HRPC(delegate: pipe)
 
 hrpc.onNotify { req in
-  precondition(req.code == 42, "expected code 42, got \\(req.code)")
+  precondition(req!.code == 42, "expected code 42, got \\(req!.code)")
   print("OK")
   exit(0)
 }
@@ -96,6 +96,52 @@ RunLoop.main.run()
   t.ok(result.ok, result.stderr)
   t.ok(result.stdout.includes('OK'), 'JS event frame decoded by Swift')
 })
+
+test(
+  'interop: JS null-payload event frame → Swift handler receives nil',
+  { skip: isWindows },
+  (t) => {
+    const schema = makeSchema()
+    const hrpc = {
+      handlers: [
+        {
+          id: 0,
+          name: '@test/notify',
+          request: { name: '@test/notify-request', stream: false, send: true },
+          response: null
+        }
+      ]
+    }
+
+    // Event frame with no payload data
+    const frame = encodeEventFrame(0, null)
+    const base64 = frame.toString('base64')
+
+    const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipe = Pipe()
+let hrpc = HRPC(delegate: pipe)
+
+hrpc.onNotify { req in
+  precondition(req == nil, "expected nil args, got \\(String(describing: req))")
+  print("OK")
+  exit(0)
+}
+
+let data = Data(base64Encoded: "${base64}")!
+hrpc.receive(data)
+RunLoop.main.run()
+`
+
+    const result = runSwift(schema, hrpc, main)
+    t.ok(result.ok, result.stderr)
+    t.ok(result.stdout.includes('OK'), 'nil payload delivers nil to Swift handler')
+  }
+)
 
 test('interop: JS request frame → Swift dispatch + response', { skip: isWindows }, (t) => {
   const schema = makeSchema()
@@ -125,8 +171,8 @@ pipe.captureMode = true
 let hrpc = HRPC(delegate: pipe)
 
 hrpc.onEcho { req in
-  precondition(req.value == 7, "expected value 7, got \\(req.value)")
-  return EchoResponse(value: req.value * 3)
+  precondition(req!.value == 7, "expected value 7, got \\(req!.value)")
+  return EchoResponse(value: req!.value * 3)
 }
 
 let data = Data(base64Encoded: "${base64}")!

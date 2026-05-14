@@ -250,6 +250,8 @@ test('uses delegate forwarder instead of closure wiring', (t) => {
   t.absent(swift.includes('onEvent ='), 'no closure wiring for events')
   t.ok(swift.includes('await req.reject('), 'dispatch uses await on reject')
   t.ok(swift.includes('await req.reply('), 'dispatch uses await on reply')
+  t.ok(swift.includes('let transport: any RPCDelegate'), 'transport is a strong let')
+  t.ok(swift.includes('didFailWith error: Error'), 'forwarder forwards didFailWith')
 })
 
 test('throws for streaming request at codegen time', (t) => {

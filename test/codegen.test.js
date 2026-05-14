@@ -86,7 +86,9 @@ server.onNotify { req in
   exit(0)
 }
 
-try client.notify(NotifyRequest(code: 99))
+Task {
+  try await client.notify(NotifyRequest(code: 99))
+}
 RunLoop.main.run()
 `
 
@@ -141,7 +143,7 @@ Task {
   let resp = try await client.echo(EchoRequest(value: 10))
   precondition(resp.value == 11, "echo: expected 11, got \\(resp.value)")
 
-  try client.notify(NotifyRequest(code: 1))
+  try await client.notify(NotifyRequest(code: 1))
   try await Task.sleep(nanoseconds: 100_000_000)
   precondition(notifyReceived, "notify handler was not called")
 
@@ -222,6 +224,33 @@ exit(0)
 })
 
 // --- JS-level tests (no Swift compilation needed) ---
+
+test('uses delegate forwarder instead of closure wiring', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/echo',
+        request: { name: '@test/echo-request', stream: false },
+        response: { name: '@test/echo-response', stream: false }
+      },
+      {
+        id: 1,
+        name: '@test/notify',
+        request: { name: '@test/notify-request', stream: false, send: true },
+        response: null
+      }
+    ]
+  }
+
+  const swift = generateSwift(hrpc)
+  t.ok(swift.includes('_HRPCDelegateForwarder'), 'emits forwarder class')
+  t.ok(swift.includes('Task { await self._rpc.receive(data) }'), 'receive wraps in Task')
+  t.absent(swift.includes('onRequest ='), 'no closure wiring for requests')
+  t.absent(swift.includes('onEvent ='), 'no closure wiring for events')
+  t.ok(swift.includes('await req.reject('), 'dispatch uses await on reject')
+  t.ok(swift.includes('await req.reply('), 'dispatch uses await on reply')
+})
 
 test('throws for streaming request at codegen time', (t) => {
   const hrpc = {

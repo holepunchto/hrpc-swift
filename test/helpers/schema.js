@@ -29,11 +29,17 @@ class Pipe: RPCDelegate {
   var peer: HRPC?
   var captured = Data()
   var captureMode = false
+  private var pendingDelivery: Task<Void, Never> = Task {}
   func rpc(_ rpc: RPC, send data: Data) {
     if captureMode {
       captured.append(data)
     } else {
-      peer?.receive(data)
+      let peer = self.peer
+      let prev = pendingDelivery
+      pendingDelivery = Task {
+        await prev.value
+        await peer?.receive(data)
+      }
     }
   }
 }

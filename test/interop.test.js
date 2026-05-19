@@ -399,3 +399,89 @@ RunLoop.main.run()
   const values = dataFrames.map((f) => c.decode(echoResponseCodec, f.data).value)
   t.alike(values, [0, 1, 2], 'Swift response-stream chunks decoded in JS')
 })
+
+test('interop: Swift request-stream OPEN frame decodes in JS', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/collect',
+        request: { name: '@test/echo-request', stream: true },
+        response: { name: '@test/echo-response', stream: false }
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+class PrintOnSend: RPCDelegate {
+  func rpc(_ rpc: RPC, send data: Data) {
+    print(data.base64EncodedString())
+    exit(0)
+  }
+}
+
+let hrpc = HRPC(delegate: PrintOnSend())
+Task { try? await hrpc.collect { _ in } }
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+
+  const frame = Buffer.from(result.stdout.trim(), 'base64')
+  const message = decodeFrame(frame)
+
+  t.is(message.type, 1, 'request-stream OPEN is a request frame (type=1)')
+  t.ok(message.id > 0, 'has non-zero request id')
+  t.is(message.command, 0, 'command matches handler id')
+  t.ok(message.stream & 0x01, 'OPEN bit is set in stream field')
+})
+
+test('interop: nil request → valid response roundtrip', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/echo',
+        request: { name: '@test/echo-request', stream: false },
+        response: { name: '@test/echo-response', stream: false }
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onEcho { req in
+  precondition(req == nil, "expected nil args, got \\(String(describing: req))")
+  return EchoResponse(value: 99)
+}
+
+Task {
+  let resp = try await client.echo(nil)
+  precondition(resp.value == 99, "expected 99, got \\(resp.value)")
+  print("OK")
+  exit(0)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'nil request produces valid response roundtrip')
+})

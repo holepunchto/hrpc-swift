@@ -832,3 +832,68 @@ test('duplex-only schema omits import Schema', (t) => {
   const swift = generateSwift(hrpc)
   t.absent(swift.includes('import Schema'), 'no import Schema for duplex-only schema')
 })
+
+test('throws for unary handler with null response and no send flag', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          { id: 0, name: '@test/void', request: { name: 'uint', stream: false }, response: null }
+        ]
+      }),
+    /no response type/i
+  )
+})
+
+test('throws for Swift keyword as method name', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          {
+            id: 0,
+            name: '@ns/for',
+            request: { name: 'uint', stream: false },
+            response: { name: 'uint', stream: false }
+          }
+        ]
+      }),
+    /reserved word/i
+  )
+})
+
+test('response-stream dispatch rejects when createResponseStream returns nil', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/feed',
+        request: { name: 'uint', stream: false },
+        response: { name: 'uint', stream: true }
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.ok(
+    swift.includes('req.reject("Stream already open"'),
+    'nil createResponseStream path calls req.reject'
+  )
+})
+
+test('event dispatch decode error forwards to delegate rather than swallowing', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/notify',
+        request: { name: '@test/notify-request', stream: false, send: true },
+        response: null
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.ok(
+    swift.includes('_forwarder.transport.rpc(_rpc, didFailWith: error)'),
+    'decode error forwarded to delegate'
+  )
+})

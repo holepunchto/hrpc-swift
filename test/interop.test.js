@@ -247,6 +247,51 @@ RunLoop.main.run()
   t.is(payload.code, 77, 'Swift-encoded payload decoded in JS: code=77')
 })
 
+test('interop: Swift duplex OPEN frame → JS decode', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/pipe',
+        request: { name: '@test/echo-request', stream: true },
+        response: { name: '@test/echo-response', stream: true }
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipe = Pipe()
+pipe.captureMode = true
+let hrpc = HRPC(delegate: pipe)
+
+Task {
+  // Hangs waiting for OPEN ack — OPEN frame is sent synchronously before suspending
+  Task { try? await hrpc.pipe { _, _ in } }
+  try await Task.sleep(nanoseconds: 100_000_000)
+  print(pipe.captured.base64EncodedString())
+  exit(0)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+
+  const frame = Buffer.from(result.stdout.trim(), 'base64')
+  const message = decodeFrame(frame)
+
+  t.is(message.type, 1, 'duplex OPEN is a request frame (type=1)')
+  t.ok(message.id > 0, 'has non-zero request id')
+  t.is(message.command, 0, 'command id matches handler id')
+  t.is(message.stream, 1, 'stream flags: open (0x01)')
+})
+
 test('interop: Swift request frame → JS decode', { skip: isWindows }, (t) => {
   const schema = makeSchema()
   const hrpc = {

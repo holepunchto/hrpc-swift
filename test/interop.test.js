@@ -247,7 +247,7 @@ RunLoop.main.run()
   t.is(payload.code, 77, 'Swift-encoded payload decoded in JS: code=77')
 })
 
-test('interop: Swift duplex OPEN frame → JS decode', { skip: isWindows }, (t) => {
+test('interop: Swift duplex OPEN frame decodes in JS', { skip: isWindows }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [

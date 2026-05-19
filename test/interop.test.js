@@ -260,23 +260,20 @@ test('interop: Swift duplex OPEN frame → JS decode', { skip: isWindows }, (t) 
     ]
   }
 
+  // Custom delegate: print the first frame sent and exit immediately — no sleep needed.
   const main = `
 import Foundation
 import BareRPC
 
-${PIPE_CLASS}
-
-let pipe = Pipe()
-pipe.captureMode = true
-let hrpc = HRPC(delegate: pipe)
-
-Task {
-  // Hangs waiting for OPEN ack — OPEN frame is sent synchronously before suspending
-  Task { try? await hrpc.pipe { _, _ in } }
-  try await Task.sleep(nanoseconds: 100_000_000)
-  print(pipe.captured.base64EncodedString())
-  exit(0)
+class PrintOnSend: RPCDelegate {
+  func rpc(_ rpc: RPC, send data: Data) {
+    print(data.base64EncodedString())
+    exit(0)
+  }
 }
+
+let hrpc = HRPC(delegate: PrintOnSend())
+Task { try? await hrpc.pipe { _, _ in } }
 RunLoop.main.run()
 `
 
@@ -289,7 +286,7 @@ RunLoop.main.run()
   t.is(message.type, 1, 'duplex OPEN is a request frame (type=1)')
   t.ok(message.id > 0, 'has non-zero request id')
   t.is(message.command, 0, 'command id matches handler id')
-  t.is(message.stream, 1, 'stream flags: open (0x01)')
+  t.is(message.stream, 1, 'REQUEST-frame stream field: OPEN (0x01)')
 })
 
 test('interop: Swift request frame → JS decode', { skip: isWindows }, (t) => {

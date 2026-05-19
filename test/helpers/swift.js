@@ -49,7 +49,7 @@ function runSwift(schema, hrpc, mainSwift) {
   // downgrade `public` to internal so it can use internal Schema types.
   let hrpcSwift = generateSwift(hrpc)
   hrpcSwift = hrpcSwift.replace('import Schema\n', '')
-  hrpcSwift = hrpcSwift.replace(/public /g, '')
+  hrpcSwift = hrpcSwift.replace(/^public /gm, '')
   fs.writeFileSync(path.join(SOURCES, 'HRPC.swift'), hrpcSwift, {
     encoding: 'utf-8'
   })

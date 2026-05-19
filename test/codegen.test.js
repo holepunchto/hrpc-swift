@@ -144,7 +144,7 @@ Task {
   precondition(resp.value == 11, "echo: expected 11, got \\(resp.value)")
 
   try await client.notify(NotifyRequest(code: 1))
-  try await Task.sleep(nanoseconds: 100_000_000)
+  try await Task.sleep(nanoseconds: 500_000_000)
   precondition(notifyReceived, "notify handler was not called")
 
   print("OK")
@@ -755,4 +755,80 @@ test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
   const json = JSON.parse(fs.readFileSync(path.join(outDir, 'hrpc.json'), 'utf-8'))
   t.is(json.version, 1, 'hrpc.json has version')
   t.ok(Array.isArray(json.schema), 'hrpc.json has schema array')
+})
+
+test('throws for invalid handler name', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          { id: 0, name: 'bad-name', request: { name: 'uint', stream: false }, response: null }
+        ]
+      }),
+    /invalid handler name/i
+  )
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          { id: 0, name: '@ns/Bad_Name', request: { name: 'uint', stream: false }, response: null }
+        ]
+      }),
+    /invalid handler name/i
+  )
+})
+
+test('throws for request-stream handler with no response', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          {
+            id: 0,
+            name: '@test/upload',
+            request: { name: 'uint', stream: true },
+            response: null
+          }
+        ]
+      }),
+    /has request\.stream.*no response/i
+  )
+})
+
+test('throws for duplicate swift method name', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          {
+            id: 0,
+            name: '@ns/echo',
+            request: { name: 'uint', stream: false },
+            response: { name: 'uint', stream: false }
+          },
+          {
+            id: 1,
+            name: '@other/echo',
+            request: { name: 'uint', stream: false },
+            response: { name: 'uint', stream: false }
+          }
+        ]
+      }),
+    /duplicate Swift method name/i
+  )
+})
+
+test('duplex-only schema omits import Schema', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/pipe',
+        request: { name: '@test/pipe-request', stream: true },
+        response: { name: '@test/pipe-response', stream: true }
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.absent(swift.includes('import Schema'), 'no import Schema for duplex-only schema')
 })

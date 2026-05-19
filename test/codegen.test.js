@@ -552,19 +552,93 @@ test('request-stream: generates callback client method and IncomingStream server
   t.ok(swift.includes('outgoing.destroy('), 'destroys stream when body throws')
 })
 
-test('throws for duplex streaming at codegen time', (t) => {
+test('duplex: generates tuple client method and command-ID set', (t) => {
   const hrpc = {
     handlers: [
       {
-        id: 0,
+        id: 3,
         name: '@test/pipe',
         request: { name: '@test/echo-request', stream: true },
         response: { name: '@test/echo-response', stream: true }
       }
     ]
   }
-  t.exception(() => generateSwift(hrpc), /duplex/i, 'throws for duplex streaming')
+  const swift = generateSwift(hrpc)
+  t.ok(
+    swift.includes(
+      'func pipe(_ body: (OutgoingStream, IncomingStream) async throws -> Void) async throws'
+    ),
+    'client method signature'
+  )
+  t.ok(
+    swift.includes('(IncomingStream, OutgoingStream) async throws -> Void'),
+    'server handler type'
+  )
+  t.ok(swift.includes('createBidirectionalStream(command: 3)'), 'uses createBidirectionalStream')
+  t.ok(swift.includes('_duplexCommands: Set<UInt> = [3]'), 'emits duplex routing set')
+  t.ok(swift.includes('_duplexCommands.contains(req.command)'), 'router gates on duplex command id')
 })
+
+test(
+  'swift: duplex — client and server exchange chunks on both streams',
+  { skip: isWindows },
+  (t) => {
+    const schema = makeSchema()
+    const hrpc = {
+      handlers: [
+        {
+          id: 0,
+          name: '@test/pipe',
+          request: { name: '@test/echo-request', stream: true },
+          response: { name: '@test/echo-response', stream: true }
+        }
+      ]
+    }
+
+    const main = `
+import Foundation
+import BareRPC
+import CompactEncoding
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onPipe { incoming, outgoing in
+  for try await chunk in incoming {
+    await outgoing.write(chunk)
+  }
+  await outgoing.end()
+}
+
+Task {
+  try await client.pipe { outgoing, incoming in
+    await outgoing.write(encode(echoRequest, EchoRequest(value: 10)))
+    await outgoing.write(encode(echoRequest, EchoRequest(value: 32)))
+    await outgoing.end()
+    var total: UInt = 0
+    for try await chunk in incoming {
+      let item = try decode(echoRequest, chunk)
+      total += item.value
+    }
+    precondition(total == 42, "expected 42, got \\(total)")
+  }
+  print("OK")
+  exit(0)
+}
+RunLoop.main.run()
+`
+
+    const result = runSwift(schema, hrpc, main)
+    t.ok(result.ok, result.stderr)
+    t.ok(result.stdout.includes('OK'), 'duplex test printed OK')
+  }
+)
 
 test('response-stream: generates IncomingStream client method and command-ID set', (t) => {
   const hrpc = {

@@ -247,6 +247,48 @@ RunLoop.main.run()
   t.is(payload.code, 77, 'Swift-encoded payload decoded in JS: code=77')
 })
 
+test('interop: Swift duplex OPEN frame decodes in JS', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/pipe',
+        request: { name: '@test/echo-request', stream: true },
+        response: { name: '@test/echo-response', stream: true }
+      }
+    ]
+  }
+
+  // Custom delegate: print the first frame sent and exit immediately — no sleep needed.
+  const main = `
+import Foundation
+import BareRPC
+
+class PrintOnSend: RPCDelegate {
+  func rpc(_ rpc: RPC, send data: Data) {
+    print(data.base64EncodedString())
+    exit(0)
+  }
+}
+
+let hrpc = HRPC(delegate: PrintOnSend())
+Task { try? await hrpc.pipe { _, _ in } }
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+
+  const frame = Buffer.from(result.stdout.trim(), 'base64')
+  const message = decodeFrame(frame)
+
+  t.is(message.type, 1, 'duplex OPEN is a request frame (type=1)')
+  t.ok(message.id > 0, 'has non-zero request id')
+  t.is(message.command, 0, 'command id matches handler id')
+  t.is(message.stream, 1, 'REQUEST-frame stream field: OPEN (0x01)')
+})
+
 test('interop: Swift request frame → JS decode', { skip: isWindows }, (t) => {
   const schema = makeSchema()
   const hrpc = {

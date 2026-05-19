@@ -565,29 +565,37 @@ test('duplex: generates tuple client method and command-ID set', (t) => {
   }
   const swift = generateSwift(hrpc)
   t.ok(
-    swift.includes('func pipe(_ body: (OutgoingStream, IncomingStream) async throws -> Void) async throws'),
+    swift.includes(
+      'func pipe(_ body: (OutgoingStream, IncomingStream) async throws -> Void) async throws'
+    ),
     'client method signature'
   )
-  t.ok(swift.includes('(IncomingStream, OutgoingStream) async throws -> Void'), 'server handler type')
+  t.ok(
+    swift.includes('(IncomingStream, OutgoingStream) async throws -> Void'),
+    'server handler type'
+  )
   t.ok(swift.includes('createBidirectionalStream(command: 3)'), 'uses createBidirectionalStream')
   t.ok(swift.includes('_duplexCommands: Set<UInt> = [3]'), 'emits duplex routing set')
   t.ok(swift.includes('_duplexCommands.contains(req.command)'), 'router gates on duplex command id')
 })
 
-test('swift: duplex — client and server exchange chunks on both streams', { skip: isWindows }, (t) => {
-  const schema = makeSchema()
-  const hrpc = {
-    handlers: [
-      {
-        id: 0,
-        name: '@test/pipe',
-        request: { name: '@test/echo-request', stream: true },
-        response: { name: '@test/echo-response', stream: true }
-      }
-    ]
-  }
+test(
+  'swift: duplex — client and server exchange chunks on both streams',
+  { skip: isWindows },
+  (t) => {
+    const schema = makeSchema()
+    const hrpc = {
+      handlers: [
+        {
+          id: 0,
+          name: '@test/pipe',
+          request: { name: '@test/echo-request', stream: true },
+          response: { name: '@test/echo-response', stream: true }
+        }
+      ]
+    }
 
-  const main = `
+    const main = `
 import Foundation
 import BareRPC
 import CompactEncoding
@@ -626,10 +634,11 @@ Task {
 RunLoop.main.run()
 `
 
-  const result = runSwift(schema, hrpc, main)
-  t.ok(result.ok, result.stderr)
-  t.ok(result.stdout.includes('OK'), 'duplex test printed OK')
-})
+    const result = runSwift(schema, hrpc, main)
+    t.ok(result.ok, result.stderr)
+    t.ok(result.stdout.includes('OK'), 'duplex test printed OK')
+  }
+)
 
 test('response-stream: generates IncomingStream client method and command-ID set', (t) => {
   const hrpc = {

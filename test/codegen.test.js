@@ -674,7 +674,7 @@ test('throws for unsupported primitive type at codegen time', (t) => {
   }
   t.exception(
     () => generateSwift(hrpc),
-    /unsupported primitive type/i,
+    { code: 'UNSUPPORTED_TYPE' },
     'throws for unknown bare type'
   )
 })
@@ -765,7 +765,7 @@ test('throws for invalid handler name', (t) => {
           { id: 0, name: 'bad-name', request: { name: 'uint', stream: false }, response: null }
         ]
       }),
-    /invalid handler name/i
+    { code: 'INVALID_HANDLER_NAME' }
   )
   t.exception(
     () =>
@@ -774,7 +774,7 @@ test('throws for invalid handler name', (t) => {
           { id: 0, name: '@ns/Bad_Name', request: { name: 'uint', stream: false }, response: null }
         ]
       }),
-    /invalid handler name/i
+    { code: 'INVALID_HANDLER_NAME' }
   )
 })
 
@@ -791,7 +791,7 @@ test('throws for request-stream handler with no response', (t) => {
           }
         ]
       }),
-    /has request\.stream.*no response/i
+    { code: 'STREAM_WITHOUT_RESPONSE' }
   )
 })
 
@@ -814,7 +814,7 @@ test('throws for duplicate swift method name', (t) => {
           }
         ]
       }),
-    /duplicate Swift method name/i
+    { code: 'DUPLICATE_METHOD_NAME' }
   )
 })
 
@@ -841,7 +841,7 @@ test('throws for unary handler with null response and no send flag', (t) => {
           { id: 0, name: '@test/void', request: { name: 'uint', stream: false }, response: null }
         ]
       }),
-    /no response type/i
+    { code: 'MISSING_RESPONSE' }
   )
 })
 
@@ -858,7 +858,7 @@ test('throws for Swift keyword as method name', (t) => {
           }
         ]
       }),
-    /reserved word/i
+    { code: 'RESERVED_KEYWORD' }
   )
 })
 

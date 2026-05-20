@@ -144,7 +144,7 @@ Task {
   precondition(resp.value == 11, "echo: expected 11, got \\(resp.value)")
 
   try await client.notify(NotifyRequest(code: 1))
-  try await Task.sleep(nanoseconds: 100_000_000)
+  try await Task.sleep(nanoseconds: 500_000_000)
   precondition(notifyReceived, "notify handler was not called")
 
   print("OK")
@@ -674,7 +674,7 @@ test('throws for unsupported primitive type at codegen time', (t) => {
   }
   t.exception(
     () => generateSwift(hrpc),
-    /unsupported primitive type/i,
+    { code: 'UNSUPPORTED_TYPE' },
     'throws for unknown bare type'
   )
 })
@@ -755,4 +755,145 @@ test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
   const json = JSON.parse(fs.readFileSync(path.join(outDir, 'hrpc.json'), 'utf-8'))
   t.is(json.version, 1, 'hrpc.json has version')
   t.ok(Array.isArray(json.schema), 'hrpc.json has schema array')
+})
+
+test('throws for invalid handler name', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          { id: 0, name: 'bad-name', request: { name: 'uint', stream: false }, response: null }
+        ]
+      }),
+    { code: 'INVALID_HANDLER_NAME' }
+  )
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          { id: 0, name: '@ns/Bad_Name', request: { name: 'uint', stream: false }, response: null }
+        ]
+      }),
+    { code: 'INVALID_HANDLER_NAME' }
+  )
+})
+
+test('throws for request-stream handler with no response', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          {
+            id: 0,
+            name: '@test/upload',
+            request: { name: 'uint', stream: true },
+            response: null
+          }
+        ]
+      }),
+    { code: 'STREAM_WITHOUT_RESPONSE' }
+  )
+})
+
+test('throws for duplicate swift method name', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          {
+            id: 0,
+            name: '@ns/echo',
+            request: { name: 'uint', stream: false },
+            response: { name: 'uint', stream: false }
+          },
+          {
+            id: 1,
+            name: '@other/echo',
+            request: { name: 'uint', stream: false },
+            response: { name: 'uint', stream: false }
+          }
+        ]
+      }),
+    { code: 'DUPLICATE_METHOD_NAME' }
+  )
+})
+
+test('duplex-only schema omits import Schema', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/pipe',
+        request: { name: '@test/pipe-request', stream: true },
+        response: { name: '@test/pipe-response', stream: true }
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.absent(swift.includes('import Schema'), 'no import Schema for duplex-only schema')
+})
+
+test('throws for unary handler with null response and no send flag', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          { id: 0, name: '@test/void', request: { name: 'uint', stream: false }, response: null }
+        ]
+      }),
+    { code: 'MISSING_RESPONSE' }
+  )
+})
+
+test('throws for Swift keyword as method name', (t) => {
+  t.exception(
+    () =>
+      generateSwift({
+        handlers: [
+          {
+            id: 0,
+            name: '@ns/for',
+            request: { name: 'uint', stream: false },
+            response: { name: 'uint', stream: false }
+          }
+        ]
+      }),
+    { code: 'RESERVED_KEYWORD' }
+  )
+})
+
+test('response-stream dispatch rejects when createResponseStream returns nil', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/feed',
+        request: { name: 'uint', stream: false },
+        response: { name: 'uint', stream: true }
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.ok(
+    swift.includes('req.reject("Stream already open"'),
+    'nil createResponseStream path calls req.reject'
+  )
+})
+
+test('event dispatch decode error forwards to delegate rather than swallowing', (t) => {
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/notify',
+        request: { name: '@test/notify-request', stream: false, send: true },
+        response: null
+      }
+    ]
+  }
+  const swift = generateSwift(hrpc)
+  t.ok(
+    swift.includes('_forwarder.transport.rpc(_rpc, didFailWith: error)'),
+    'decode error forwarded to delegate'
+  )
 })

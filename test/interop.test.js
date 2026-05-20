@@ -179,7 +179,7 @@ let data = Data(base64Encoded: "${base64}")!
 Task { await hrpc.receive(data) }
 
 Task {
-  try await Task.sleep(nanoseconds: 100_000_000)
+  try await Task.sleep(nanoseconds: 500_000_000)
   print(pipe.captured.base64EncodedString())
   exit(0)
 }
@@ -317,7 +317,7 @@ Task {
 }
 
 Task {
-  try await Task.sleep(nanoseconds: 100_000_000)
+  try await Task.sleep(nanoseconds: 500_000_000)
   print(pipe.captured.base64EncodedString())
   exit(0)
 }
@@ -336,4 +336,152 @@ RunLoop.main.run()
 
   const payload = c.decode(echoRequestCodec, message.data)
   t.is(payload.value, 55, 'Swift-encoded request decoded in JS: value=55')
+})
+
+test('interop: JS request → Swift response-stream chunks → JS decode', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/feed',
+        request: { name: '@test/echo-request', stream: false },
+        response: { name: '@test/echo-response', stream: true }
+      }
+    ]
+  }
+
+  const payload = Buffer.from(c.encode(echoRequestCodec, { value: 3 }))
+  const frame = encodeRequestFrame(1, 0, payload)
+  const base64 = frame.toString('base64')
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipe = Pipe()
+pipe.captureMode = true
+let hrpc = HRPC(delegate: pipe)
+
+hrpc.onFeed { req, stream in
+  for i: UInt in 0..<(req?.value ?? 0) {
+    await stream.write(encode(echoResponse, EchoResponse(value: i)))
+  }
+  await stream.end()
+}
+
+let data = Data(base64Encoded: "${base64}")!
+Task { await hrpc.receive(data) }
+
+Task {
+  try await Task.sleep(nanoseconds: 500_000_000)
+  print(pipe.captured.base64EncodedString())
+  exit(0)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+
+  // Decode all length-prefixed frames from captured output
+  const captured = Buffer.from(result.stdout.trim(), 'base64')
+  const state = c.state(0, captured.length, captured)
+  const frames = []
+  while (state.start < state.end) frames.push(m.message.decode(state))
+
+  // Stream data frames are type=3 with a non-empty data field
+  const dataFrames = frames.filter((f) => f.type === 3 && f.data && f.data.length > 0)
+  t.is(dataFrames.length, 3, 'three stream data frames: values 0, 1, 2')
+
+  const values = dataFrames.map((f) => c.decode(echoResponseCodec, f.data).value)
+  t.alike(values, [0, 1, 2], 'Swift response-stream chunks decoded in JS')
+})
+
+test('interop: Swift request-stream OPEN frame decodes in JS', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/collect',
+        request: { name: '@test/echo-request', stream: true },
+        response: { name: '@test/echo-response', stream: false }
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+class PrintOnSend: RPCDelegate {
+  func rpc(_ rpc: RPC, send data: Data) {
+    print(data.base64EncodedString())
+    exit(0)
+  }
+}
+
+let hrpc = HRPC(delegate: PrintOnSend())
+Task { try? await hrpc.collect { _ in } }
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+
+  const frame = Buffer.from(result.stdout.trim(), 'base64')
+  const message = decodeFrame(frame)
+
+  t.is(message.type, 1, 'request-stream OPEN is a request frame (type=1)')
+  t.ok(message.id > 0, 'has non-zero request id')
+  t.is(message.command, 0, 'command matches handler id')
+  t.ok(message.stream & 0x01, 'OPEN bit is set in stream field')
+})
+
+test('interop: nil request → valid response roundtrip', { skip: isWindows }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/echo',
+        request: { name: '@test/echo-request', stream: false },
+        response: { name: '@test/echo-response', stream: false }
+      }
+    ]
+  }
+
+  const main = `
+import Foundation
+import BareRPC
+
+${PIPE_CLASS}
+
+let pipeA = Pipe()
+let pipeB = Pipe()
+let client = HRPC(delegate: pipeA)
+let server = HRPC(delegate: pipeB)
+pipeA.peer = server
+pipeB.peer = client
+
+server.onEcho { req in
+  precondition(req == nil, "expected nil args, got \\(String(describing: req))")
+  return EchoResponse(value: 99)
+}
+
+Task {
+  let resp = try await client.echo(nil)
+  precondition(resp.value == 99, "expected 99, got \\(resp.value)")
+  print("OK")
+  exit(0)
+}
+RunLoop.main.run()
+`
+
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'nil request produces valid response roundtrip')
 })

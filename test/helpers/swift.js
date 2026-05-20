@@ -45,11 +45,13 @@ function runSwift(schema, hrpc, mainSwift) {
     encoding: 'utf-8'
   })
 
-  // Generate HRPC.swift: strip `import Schema` (same module in test) and
-  // downgrade `public` to internal so it can use internal Schema types.
+  // Generate HRPC.swift: strip `import Schema` (types are in scope, same module).
+  // Strip `public class HRPC` → `class HRPC` so the class can reference internal
+  // Schema types. Member-level `public` is harmless in a single-module executable
+  // (Swift treats it as internal) so it is left as-is.
   let hrpcSwift = generateSwift(hrpc)
   hrpcSwift = hrpcSwift.replace('import Schema\n', '')
-  hrpcSwift = hrpcSwift.replace(/public /g, '')
+  hrpcSwift = hrpcSwift.replace(/^public /gm, '')
   fs.writeFileSync(path.join(SOURCES, 'HRPC.swift'), hrpcSwift, {
     encoding: 'utf-8'
   })

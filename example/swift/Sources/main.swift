@@ -7,7 +7,7 @@ import Schema
 class Pipe: RPCDelegate {
   var peer: HRPC?
   func rpc(_ rpc: RPC, send data: Data) {
-    peer?.receive(data)
+    Task { await self.peer?.receive(data) }
   }
 }
 
@@ -26,6 +26,7 @@ var messages: [Message] = []
 var nextId: UInt = 1
 
 server.onSendMessage { req in
+  guard let req = req else { return SendMessageResponse(id: 0, timestamp: 0) }
   let id = nextId
   nextId += 1
   let timestamp = UInt(Date().timeIntervalSince1970)
@@ -33,13 +34,13 @@ server.onSendMessage { req in
   messages.append(msg)
 
   // Notify the client about the new message
-  try server.newMessage(msg)
+  try await server.newMessage(msg)
 
   return SendMessageResponse(id: id, timestamp: timestamp)
 }
 
 server.onGetHistory { req in
-  let limit = Int(req.limit)
+  let limit = req.map { Int($0.limit) } ?? 10
   let slice = Array(messages.suffix(limit))
   return GetHistoryResponse(messages: slice)
 }
@@ -47,6 +48,7 @@ server.onGetHistory { req in
 // -- Client-side: listen for new message events --
 
 client.onNewMessage { msg in
+  guard let msg = msg else { return }
   print("[event] New message #\(msg.id): \"\(msg.text)\"")
 }
 

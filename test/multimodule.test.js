@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const SwiftHRPC = require('../index.js')
 const { runSwiftMultiModule } = require('./helpers/swift-multimodule')
 const { makeSchema } = require('./helpers/schema')
 const { isWindows } = require('which-runtime')
@@ -8,25 +9,25 @@ const { isWindows } = require('which-runtime')
 // The single-module workspace (helpers/swift.js) strips `public` and
 // `import Schema` so everything compiles in one target. That leaves the
 // shipped shape — a `public class HRPC` in its own module importing a separate
-// Schema module — compiled by nothing. This test closes that gap: it builds
-// the generated HRPC.swift verbatim against real hyperschema-swift output in
-// its own `Schema` module and runs a real roundtrip through it.
+// Schema module — compiled by nothing. This test closes that gap: it generates
+// the real `Schema` and `HRPC` packages with their own `Package.swift` (via
+// each generator's `toDisk`), wires them by path dependency, and runs a real
+// roundtrip — the same consumer flow the example demonstrates, without an
+// out-of-band `npm install`.
 
 test(
   'multimodule: public HRPC compiles against a separate Schema module',
   { skip: isWindows },
   (t) => {
     const schema = makeSchema()
-    const hrpc = {
-      handlers: [
-        {
-          id: 0,
-          name: '@test/echo',
-          request: { name: '@test/echo-request', stream: false },
-          response: { name: '@test/echo-response', stream: false }
-        }
-      ]
-    }
+
+    const hrpc = SwiftHRPC.from(schema)
+    const rpc = hrpc.namespace('test')
+    rpc.register({
+      name: 'echo',
+      request: { name: '@test/echo-request', stream: false },
+      response: { name: '@test/echo-response', stream: false }
+    })
 
     const main = `
 import Foundation
@@ -67,7 +68,7 @@ Task {
 RunLoop.main.run()
 `
 
-    const result = runSwiftMultiModule(schema.toCode(), hrpc, main)
+    const result = runSwiftMultiModule(schema, hrpc, main)
     t.ok(result.ok, result.stderr)
     t.ok(result.stdout.includes('OK'), 'cross-module roundtrip printed OK')
   }

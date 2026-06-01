@@ -428,7 +428,6 @@ test(
     const main = `
 import Foundation
 import BareRPC
-import CompactEncoding
 
 ${PIPE_CLASS}
 
@@ -598,7 +597,6 @@ test(
     const main = `
 import Foundation
 import BareRPC
-import CompactEncoding
 
 ${PIPE_CLASS}
 

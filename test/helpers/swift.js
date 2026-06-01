@@ -10,9 +10,10 @@ const SOURCES = path.join(WORKSPACE, 'Sources')
 const TIMEOUT = 120000
 
 // Single-module executable: Schema.swift and HRPC.swift live in the same
-// target so we avoid cross-module visibility issues (hyperschema types are
-// not yet `public`). We strip `import Schema` from HRPC.swift since the
-// types are already in scope.
+// target, which keeps the per-test build to one module. We strip
+// `import Schema` from HRPC.swift since the types are already in scope. The
+// real multi-module layout (a separate, public Schema module) is exercised
+// end-to-end by multimodule.test.js.
 const TEST_PACKAGE_SWIFT = `// swift-tools-version: 5.10
 import PackageDescription
 
@@ -45,10 +46,8 @@ function runSwift(schema, hrpc, mainSwift) {
     encoding: 'utf-8'
   })
 
-  // Generate HRPC.swift: strip `import Schema` (types are in scope, same module).
-  // Strip `public class HRPC` → `class HRPC` so the class can reference internal
-  // Schema types. Member-level `public` is harmless in a single-module executable
-  // (Swift treats it as internal) so it is left as-is.
+  // Generate HRPC.swift: strip `import Schema` (types are in scope, same module)
+  // and drop top-level `public` so nothing leaks out of the executable target.
   let hrpcSwift = generateSwift(hrpc)
   hrpcSwift = hrpcSwift.replace('import Schema\n', '')
   hrpcSwift = hrpcSwift.replace(/^public /gm, '')

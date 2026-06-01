@@ -1,3 +1,4 @@
 node_modules
 package-lock.json
 /test/swift-workspace/
+/test/swift-multimodule-workspace/

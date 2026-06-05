@@ -1,8 +1,6 @@
 # Build output and generated Swift workspaces. Prettier doesn't read
 # .gitignore, so these have to be listed again here or it scans the
 # generated JSON/YAML under them.
-node_modules
-package-lock.json
 **/.build/
 /test/swift-workspace/
 /test/swift-multimodule-workspace/

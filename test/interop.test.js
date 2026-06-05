@@ -367,7 +367,7 @@ let hrpc = HRPC(delegate: pipe)
 
 hrpc.onFeed { req, stream in
   for i: UInt in 0..<(req?.value ?? 0) {
-    await stream.write(encode(echoResponse, EchoResponse(value: i)))
+    await stream.write(try encode(echoResponse, EchoResponse(value: i)))
   }
   await stream.end()
 }

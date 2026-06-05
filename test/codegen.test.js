@@ -384,7 +384,7 @@ pipeB.peer = client
 
 server.onFeed { req, stream in
   for i: UInt in 0..<(req?.value ?? 0) {
-    await stream.write(encode(echoResponse, EchoResponse(value: i)))
+    await stream.write(try encode(echoResponse, EchoResponse(value: i)))
   }
   await stream.end()
 }
@@ -449,8 +449,8 @@ server.onCollect { stream in
 
 Task {
   let response = try await client.collect { stream in
-    await stream.write(encode(echoRequest, EchoRequest(value: 10)))
-    await stream.write(encode(echoRequest, EchoRequest(value: 32)))
+    await stream.write(try encode(echoRequest, EchoRequest(value: 10)))
+    await stream.write(try encode(echoRequest, EchoRequest(value: 32)))
   }
   precondition(response?.value == 42, "expected 42, got \\(String(describing: response?.value))")
   print("OK")
@@ -616,8 +616,8 @@ server.onPipe { incoming, outgoing in
 
 Task {
   try await client.pipe { outgoing, incoming in
-    await outgoing.write(encode(echoRequest, EchoRequest(value: 10)))
-    await outgoing.write(encode(echoRequest, EchoRequest(value: 32)))
+    await outgoing.write(try encode(echoRequest, EchoRequest(value: 10)))
+    await outgoing.write(try encode(echoRequest, EchoRequest(value: 32)))
     await outgoing.end()
     var total: UInt = 0
     for try await chunk in incoming {

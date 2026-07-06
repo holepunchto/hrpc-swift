@@ -17,11 +17,13 @@ const path = require('path')
 const SwiftHyperschema = require('hyperschema-swift')
 const SwiftHRPC = require('../index.js')
 const { runSwift } = require('./helpers/swift')
-const { isWindows } = require('which-runtime')
+const { isLinux } = require('which-runtime')
 
-// hrpc-test is Node-only (no Bare imports map): require() throws under bare, so skip the file.
+// Linux-only: hrpc-test is Node-only (require() throws under bare), and Swift's cold build is
+// costly on the macOS/Windows CI runners. This conformance is platform-independent, so verifying
+// it on linux suffices; platform-specific Swift behavior is covered by interop.test.js.
 const isBare = typeof Bare !== 'undefined'
-const skip = isBare || isWindows
+const skip = isBare || !isLinux
 
 // Swift string literal escaping for hex/text embedded in generated drivers.
 function swiftString(s) {

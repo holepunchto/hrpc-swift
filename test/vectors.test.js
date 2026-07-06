@@ -17,13 +17,12 @@ const path = require('path')
 const SwiftHyperschema = require('hyperschema-swift')
 const SwiftHRPC = require('../index.js')
 const { runSwift } = require('./helpers/swift')
-const { isLinux } = require('which-runtime')
+const { isWindows } = require('which-runtime')
 
-// Linux-only: hrpc-test is Node-only (require() throws under bare), and Swift's cold build is
-// costly on the macOS/Windows CI runners. This conformance is platform-independent, so verifying
-// it on linux suffices; platform-specific Swift behavior is covered by interop.test.js.
+// hrpc-test is Node-only (require() throws under bare), and Windows CI has no Swift
+// toolchain - skip there. Otherwise run wherever interop.test.js runs (linux + darwin).
 const isBare = typeof Bare !== 'undefined'
-const skip = isBare || !isLinux
+const skip = isBare || isWindows
 
 // Swift string literal escaping for hex/text embedded in generated drivers.
 function swiftString(s) {
@@ -282,10 +281,8 @@ exit(failed ? 1 : 0)
     return runSwift(schema, hrpc, main)
   }
 
-  // Guard the swift build itself, not just the test bodies: buildMain() runs the
-  // costly cold `swift run`, so on skipped platforms we must not invoke it at all.
-  const result = skip ? null : buildMain()
-  const byKey = skip ? new Map() : parseResults(result)
+  const result = buildMain()
+  const byKey = parseResults(result)
 
   for (const v of rawVectors) {
     test(`Swift decodes ${v.family}[${v.i}] - ${v.note}`, { skip }, (t) => {

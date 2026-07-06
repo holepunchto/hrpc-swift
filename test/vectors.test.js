@@ -282,8 +282,10 @@ exit(failed ? 1 : 0)
     return runSwift(schema, hrpc, main)
   }
 
-  const result = buildMain()
-  const byKey = parseResults(result)
+  // Guard the swift build itself, not just the test bodies: buildMain() runs the
+  // costly cold `swift run`, so on skipped platforms we must not invoke it at all.
+  const result = skip ? null : buildMain()
+  const byKey = skip ? new Map() : parseResults(result)
 
   for (const v of rawVectors) {
     test(`Swift decodes ${v.family}[${v.i}] - ${v.note}`, { skip }, (t) => {

@@ -9,6 +9,33 @@ const WORKSPACE = path.join(__dirname, '../swift-workspace')
 const SOURCES = path.join(WORKSPACE, 'Sources')
 const TIMEOUT = 120000
 
+const RAW_WORKSPACE = path.join(__dirname, '../swift-raw-workspace')
+const RAW_SOURCES = path.join(RAW_WORKSPACE, 'Sources', 'HRPCTestRaw')
+
+// Schema-free package: only bare-rpc-swift, no generated Schema/HRPC. Used by
+// runSwiftRaw for drivers that decode hrpc-test's raw envelope/error/boundary
+// vectors directly via BareRPC's internal Messages API.
+const RAW_PACKAGE_SWIFT = `// swift-tools-version: 5.10
+import PackageDescription
+
+let package = Package(
+  name: "HRPCTestRaw",
+  platforms: [.macOS(.v11), .iOS(.v14)],
+  dependencies: [
+    .package(url: "https://github.com/holepunchto/bare-rpc-swift", branch: "main")
+  ],
+  targets: [
+    .executableTarget(
+      name: "HRPCTestRaw",
+      dependencies: [
+        .product(name: "BareRPC", package: "bare-rpc-swift")
+      ],
+      path: "Sources/HRPCTestRaw"
+    )
+  ]
+)
+`
+
 // Single-module executable: Schema.swift and HRPC.swift live in the same
 // target, which keeps the per-test build to one module. We strip
 // `import Schema` from HRPC.swift since the types are already in scope. The
@@ -77,4 +104,30 @@ function runSwift(schema, hrpc, mainSwift) {
   }
 }
 
-module.exports = { runSwift }
+// Runs a schema-free main.swift against bare-rpc-swift alone, reachable via
+// `@testable import BareRPC`. No Schema.swift/HRPC.swift generation.
+function runSwiftRaw(mainSwift) {
+  fs.mkdirSync(RAW_SOURCES, { recursive: true })
+
+  fs.writeFileSync(path.join(RAW_WORKSPACE, 'Package.swift'), RAW_PACKAGE_SWIFT)
+  fs.writeFileSync(path.join(RAW_SOURCES, 'main.swift'), mainSwift)
+
+  const result = spawnSync('swift', ['run'], {
+    cwd: RAW_WORKSPACE,
+    encoding: 'utf8',
+    timeout: TIMEOUT
+  })
+
+  const timedOut = result.error && result.error.code === 'ETIMEDOUT'
+  return {
+    ok: result.status === 0 && !timedOut,
+    stdout: result.stdout ? result.stdout.toString() : '',
+    stderr: timedOut
+      ? `[swift run timed out after ${TIMEOUT}ms] ${result.error.message}`
+      : result.stderr
+        ? result.stderr.toString()
+        : ''
+  }
+}
+
+module.exports = { runSwift, runSwiftRaw }

@@ -4,18 +4,19 @@
 // bare-rpc-swift) and assert they match the fixtures - a non-JS check on the
 // canonical bytes. Mirrors hrpc-c/test/vectors.test.js.
 //
-// `swift run` carries heavy SwiftPM build overhead, so - unlike C's cheap
-// per-test compile - we batch. All schema-free decode/encode checks run in a
-// SINGLE `swift run`; the dispatch checks (which need the generated
-// schema/hrpc) run in a second. Each vector still prints its own keyed result
-// line, and each still gets its own brittle assertion, so a failure names the
-// exact vector/family - we only collapsed the process invocations, not the
-// reporting.
+// `swift run` carries heavy SwiftPM build overhead (a cold dependency
+// resolve + build), so every vector - schema-free envelope/error/boundary
+// decodes, their encode-match checks, and the dispatch decodes/encode-match,
+// which need the generated Schema/HRPC - runs in a SINGLE `swift run` inside
+// the shared swift-workspace already used by interop.test.js. Each vector
+// still prints its own keyed result line, and each still gets its own
+// brittle assertion, so a failure names the exact vector/family - only the
+// process invocations are collapsed, not the reporting.
 const test = require('brittle')
 const path = require('path')
 const SwiftHyperschema = require('hyperschema-swift')
 const SwiftHRPC = require('../index.js')
-const { runSwift, runSwiftRaw } = require('./helpers/swift')
+const { runSwift } = require('./helpers/swift')
 const { isWindows } = require('which-runtime')
 
 // hrpc-test is Node-only (no Bare imports map): require() throws under bare, so skip the file.
@@ -31,6 +32,10 @@ function hexToDataLiteral(hex) {
   return `hexToData("${hex}")`
 }
 
+// `@testable import BareRPC` reaches the internal Messages/DecodedMessage API
+// used by the schema-free checks below; the generated Schema/HRPC types used
+// by the dispatch checks live in the same executable target, so both halves
+// share this one preamble.
 const PREAMBLE = `
 import Foundation
 @testable import BareRPC
@@ -47,12 +52,12 @@ func hexToData(_ hex: String) -> Data {
 }
 `
 
-// Batched drivers report per-vector results instead of aborting on the first
-// mismatch, so one run verifies every vector and JS can attribute failures.
-// `check` throws a labelled reason; `runVector` catches it and prints one line
-// per vector ("OK <key>" / "FAIL <key> <reason>"), keeping every later vector
-// running. Encode checks print "ENC <key> <hex>". The process exits non-zero
-// if any vector failed.
+// The batched driver reports per-vector results instead of aborting on the
+// first mismatch, so one run verifies every vector and JS can attribute
+// failures. `check` throws a labelled reason; `runVector` catches it and
+// prints one line per vector ("OK <key>" / "FAIL <key> <reason>"), keeping
+// every later vector running. Encode checks print "ENC <key> <hex>". The
+// process exits non-zero if any vector failed.
 const RESULT_PREAMBLE = `${PREAMBLE}
 enum CheckError: Error { case failed(String) }
 
@@ -147,8 +152,10 @@ function decodeBody(hex, descriptor) {
   return lines.join('\n    ')
 }
 
-// Parse a batched driver's stdout into key -> result. Decode vectors yield
-// { ok, reason }; encode checks yield { hex }.
+// Parse the batched driver's stdout into key -> result. Decode vectors yield
+// { ok, reason }; encode checks yield { hex }. A key with no line at all
+// (crash before it ran, or a typo in the driver) leaves the map without an
+// entry, and callers below treat "no entry" as a failure rather than a skip.
 function parseResults(result) {
   const map = new Map()
   if (!result || !result.stdout) return map
@@ -183,58 +190,12 @@ if (!skip) {
     }
   }
 
-  // Two schema-free encode-match checks share this run too (they only need
-  // BareRPC), so the whole schema-free suite is one `swift run`.
+  // Two schema-free encode-match checks join the same run (they only need
+  // BareRPC).
   const errorEnc = loadFamily('error')
   const envelopeEnc = loadFamily('envelope')
   const envelopeStreamIdx = envelopeEnc.messages.findIndex((m) => m.note === 'stream request data')
   const envelopeStreamDesc = envelopeEnc.messages[envelopeStreamIdx].descriptor
-  const errorEncDesc = errorEnc.messages[0].descriptor
-
-  function buildRawBatch() {
-    const decodeBlocks = rawVectors
-      .map(
-        (v) => `runVector("${v.key}") {
-    ${decodeBody(v.hex, v.descriptor)}
-  }`
-      )
-      .join('\n  ')
-
-    const encodeBlocks = `do {
-    let encoded = Messages.encodeErrorResponse(
-      id: ${errorEncDesc.id},
-      message: "${swiftString(errorEncDesc.error.message)}",
-      code: "${swiftString(errorEncDesc.error.code)}",
-      errno: ${errorEncDesc.error.errno}
-    )
-    print("ENC enc:error:0 " + encoded.map { String(format: "%02x", $0) }.joined())
-  }
-  do {
-    let encoded = Messages.encodeStream(id: ${envelopeStreamDesc.id}, flags: ${envelopeStreamDesc.stream}, data: ${hexToDataLiteral(envelopeStreamDesc.data)})
-    print("ENC enc:envelope_stream " + encoded.map { String(format: "%02x", $0) }.joined())
-  }`
-
-    return `${RESULT_PREAMBLE}
-  ${decodeBlocks}
-  ${encodeBlocks}
-exit(failed ? 1 : 0)
-`
-  }
-
-  // Run the schema-free batch exactly once; every test below reads its result.
-  const rawResult = runSwiftRaw(buildRawBatch())
-  const rawByKey = parseResults(rawResult)
-
-  for (const v of rawVectors) {
-    test(`Swift decodes ${v.family}[${v.i}] - ${v.note}`, { skip }, (t) => {
-      const r = rawByKey.get(v.key)
-      if (!r) {
-        t.fail(`no Swift result for ${v.key}: ${rawResult.stderr}`)
-        return
-      }
-      t.ok(r.ok, r.ok ? 'decoded ok' : r.reason)
-    })
-  }
 
   // Load hrpc-test's frozen fixtures/dispatch/{schema,hrpc} directly - no hand-copied schema to drift.
   const HRPC_TEST_DIR = path.dirname(require.resolve('hrpc-test'))
@@ -243,18 +204,44 @@ exit(failed ? 1 : 0)
 
   const dispatch = loadFamily('dispatch')
 
-  // The dispatch decodes and the dispatch encode-match share one generated
-  // schema/hrpc, so one `swift run` serves all of them.
-  function buildDispatchBatch() {
+  // Everything above shares one generated Schema/HRPC and one BareRPC
+  // dependency, so one `swift run` in the shared swift-workspace covers the
+  // whole family: schema-free decodes, schema-free encode-match, dispatch
+  // decodes, and dispatch encode-match.
+  function buildMain() {
     const schema = SwiftHyperschema.from(DISPATCH_SCHEMA_DIR)
     const hrpc = SwiftHRPC.from(DISPATCH_SCHEMA_DIR, DISPATCH_HRPC_DIR)
 
-    const main = `${RESULT_PREAMBLE}
-  runVector("dispatch:0") {
+    const decodeBlocks = rawVectors
+      .map(
+        (v) => `runVector("${v.key}") {
+    ${decodeBody(v.hex, v.descriptor)}
+  }`
+      )
+      .join('\n  ')
+
+    const rawEncodeBlocks = `do {
+    let encoded = Messages.encodeErrorResponse(
+      id: ${errorEnc.messages[0].descriptor.id},
+      message: "${swiftString(errorEnc.messages[0].descriptor.error.message)}",
+      code: "${swiftString(errorEnc.messages[0].descriptor.error.code)}",
+      errno: ${errorEnc.messages[0].descriptor.error.errno}
+    )
+    print("ENC enc:error:0 " + encoded.map { String(format: "%02x", $0) }.joined())
+  }
+  do {
+    let encoded = Messages.encodeStream(id: ${envelopeStreamDesc.id}, flags: ${envelopeStreamDesc.stream}, data: ${hexToDataLiteral(envelopeStreamDesc.data)})
+    print("ENC enc:envelope_stream " + encoded.map { String(format: "%02x", $0) }.joined())
+  }`
+
+    // A nil `data` here would otherwise trap the whole batched run on a force
+    // unwrap; `check` turns it into a normal per-vector FAIL instead.
+    const dispatchBlocks = `runVector("dispatch:0") {
     let msg = try Messages.decodeFrame(${hexToDataLiteral(dispatch.frames[0])})
     guard case .request(let req) = msg! else { throw CheckError.failed("wrong case: \\(msg!)") }
     try check(req.id == 1, "id mismatch: \\(req.id)")
     try check(req.command == 0, "command mismatch: \\(req.command)")
+    try check(req.data != nil, "expected data, got nil")
     let payload = try decode(helloRequest, req.data!)
     try check(payload.name == "ada", "name mismatch: \\(payload.name)")
   }
@@ -263,6 +250,7 @@ exit(failed ? 1 : 0)
     guard case .response(let resp) = msg! else { throw CheckError.failed("wrong case: \\(msg!)") }
     try check(resp.id == 1, "id mismatch: \\(resp.id)")
     guard case .success(let data) = resp.result else { throw CheckError.failed("expected success, got \\(resp.result)") }
+    try check(data != nil, "expected data, got nil")
     let payload = try decode(helloResponse, data!)
     try check(payload.text == "hi ada", "text mismatch: \\(payload.text)")
   }
@@ -271,6 +259,7 @@ exit(failed ? 1 : 0)
     guard case .request(let req) = msg! else { throw CheckError.failed("wrong case: \\(msg!)") }
     try check(req.id == 0, "id mismatch: \\(req.id)")
     try check(req.command == 1, "command mismatch: \\(req.command)")
+    try check(req.data != nil, "expected data, got nil")
     let payload = try decode(pingRequest, req.data!)
     try check(payload.seq == 7, "seq mismatch: \\(payload.seq)")
   }
@@ -280,14 +269,30 @@ exit(failed ? 1 : 0)
   } catch {
     print("FAIL enc:dispatch:0 \\(error)")
     failed = true
-  }
+  }`
+
+    const main = `${RESULT_PREAMBLE}
+  ${decodeBlocks}
+  ${rawEncodeBlocks}
+  ${dispatchBlocks}
 exit(failed ? 1 : 0)
 `
     return runSwift(schema, hrpc, main)
   }
 
-  const dispatchResult = buildDispatchBatch()
-  const dispatchByKey = parseResults(dispatchResult)
+  const result = buildMain()
+  const byKey = parseResults(result)
+
+  for (const v of rawVectors) {
+    test(`Swift decodes ${v.family}[${v.i}] - ${v.note}`, { skip }, (t) => {
+      const r = byKey.get(v.key)
+      if (!r) {
+        t.fail(`no Swift result for ${v.key}: ${result.stderr}`)
+        return
+      }
+      t.ok(r.ok, r.ok ? 'decoded ok' : r.reason)
+    })
+  }
 
   const DISPATCH_DECODE_NOTES = [
     'hello request payload',
@@ -296,9 +301,9 @@ exit(failed ? 1 : 0)
   ]
   for (let i = 0; i < 3; i++) {
     test(`Swift decodes dispatch[${i}] - ${DISPATCH_DECODE_NOTES[i]}`, { skip }, (t) => {
-      const r = dispatchByKey.get(`dispatch:${i}`)
+      const r = byKey.get(`dispatch:${i}`)
       if (!r) {
-        t.fail(`no Swift result for dispatch:${i}: ${dispatchResult.stderr}`)
+        t.fail(`no Swift result for dispatch:${i}: ${result.stderr}`)
         return
       }
       t.ok(r.ok, r.ok ? 'decoded ok' : r.reason)
@@ -316,27 +321,27 @@ exit(failed ? 1 : 0)
   console.log('encode-match spot-check covers:', ENCODE_CHECKED.join('; '))
 
   test('Swift encodes dispatch[0] - hello request matches fixture bytes', { skip }, (t) => {
-    const r = dispatchByKey.get('enc:dispatch:0')
+    const r = byKey.get('enc:dispatch:0')
     if (!r) {
-      t.fail(`no Swift result for enc:dispatch:0: ${dispatchResult.stderr}`)
+      t.fail(`no Swift result for enc:dispatch:0: ${result.stderr}`)
       return
     }
     t.is(r.hex, dispatch.frames[0], 'Swift-encoded bytes equal the fixture hex')
   })
 
   test('Swift encodes error[0] response matches fixture bytes', { skip }, (t) => {
-    const r = rawByKey.get('enc:error:0')
+    const r = byKey.get('enc:error:0')
     if (!r) {
-      t.fail(`no Swift result for enc:error:0: ${rawResult.stderr}`)
+      t.fail(`no Swift result for enc:error:0: ${result.stderr}`)
       return
     }
     t.is(r.hex, errorEnc.frames[0], 'Swift-encoded bytes equal the fixture hex')
   })
 
   test('Swift encodes envelope stream-data frame matches fixture bytes', { skip }, (t) => {
-    const r = rawByKey.get('enc:envelope_stream')
+    const r = byKey.get('enc:envelope_stream')
     if (!r) {
-      t.fail(`no Swift result for enc:envelope_stream: ${rawResult.stderr}`)
+      t.fail(`no Swift result for enc:envelope_stream: ${result.stderr}`)
       return
     }
     t.is(r.hex, envelopeEnc.frames[envelopeStreamIdx], 'Swift-encoded bytes equal the fixture hex')

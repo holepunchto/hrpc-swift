@@ -7,6 +7,11 @@ const { makeSchema, PIPE_CLASS } = require('./helpers/schema')
 const m = require('bare-rpc/messages')
 const { isWindows } = require('which-runtime')
 
+const isBare = typeof Bare !== 'undefined'
+// Swift-spawning tests run on the Bare pass only (see vectors.test.js) to avoid
+// duplicating the heavy Swift build across the node and bare runs.
+const skip = !isBare || isWindows
+
 // --- Wire format helpers ---
 
 function encodeRequestFrame(id, command, payloadBuffer) {
@@ -55,7 +60,7 @@ const notifyRequestCodec = {
 
 // --- JS → Swift tests ---
 
-test('interop: JS event frame → Swift dispatch', { skip: isWindows }, (t) => {
+test('interop: JS event frame → Swift dispatch', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -97,27 +102,24 @@ RunLoop.main.run()
   t.ok(result.stdout.includes('OK'), 'JS event frame decoded by Swift')
 })
 
-test(
-  'interop: JS null-payload event frame → Swift handler receives nil',
-  { skip: isWindows },
-  (t) => {
-    const schema = makeSchema()
-    const hrpc = {
-      handlers: [
-        {
-          id: 0,
-          name: '@test/notify',
-          request: { name: '@test/notify-request', stream: false, send: true },
-          response: null
-        }
-      ]
-    }
+test('interop: JS null-payload event frame → Swift handler receives nil', { skip }, (t) => {
+  const schema = makeSchema()
+  const hrpc = {
+    handlers: [
+      {
+        id: 0,
+        name: '@test/notify',
+        request: { name: '@test/notify-request', stream: false, send: true },
+        response: null
+      }
+    ]
+  }
 
-    // Event frame with no payload data
-    const frame = encodeEventFrame(0, null)
-    const base64 = frame.toString('base64')
+  // Event frame with no payload data
+  const frame = encodeEventFrame(0, null)
+  const base64 = frame.toString('base64')
 
-    const main = `
+  const main = `
 import Foundation
 import BareRPC
 
@@ -137,13 +139,12 @@ Task { await hrpc.receive(data) }
 RunLoop.main.run()
 `
 
-    const result = runSwift(schema, hrpc, main)
-    t.ok(result.ok, result.stderr)
-    t.ok(result.stdout.includes('OK'), 'nil payload delivers nil to Swift handler')
-  }
-)
+  const result = runSwift(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'nil payload delivers nil to Swift handler')
+})
 
-test('interop: JS request frame → Swift dispatch + response', { skip: isWindows }, (t) => {
+test('interop: JS request frame → Swift dispatch + response', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -202,7 +203,7 @@ RunLoop.main.run()
 
 // --- Swift → JS tests ---
 
-test('interop: Swift event frame → JS decode', { skip: isWindows }, (t) => {
+test('interop: Swift event frame → JS decode', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -247,7 +248,7 @@ RunLoop.main.run()
   t.is(payload.code, 77, 'Swift-encoded payload decoded in JS: code=77')
 })
 
-test('interop: Swift duplex OPEN frame decodes in JS', { skip: isWindows }, (t) => {
+test('interop: Swift duplex OPEN frame decodes in JS', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -289,7 +290,7 @@ RunLoop.main.run()
   t.is(message.stream, 1, 'REQUEST-frame stream field: OPEN (0x01)')
 })
 
-test('interop: Swift request frame → JS decode', { skip: isWindows }, (t) => {
+test('interop: Swift request frame → JS decode', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -338,7 +339,7 @@ RunLoop.main.run()
   t.is(payload.value, 55, 'Swift-encoded request decoded in JS: value=55')
 })
 
-test('interop: JS request → Swift response-stream chunks → JS decode', { skip: isWindows }, (t) => {
+test('interop: JS request → Swift response-stream chunks → JS decode', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -400,7 +401,7 @@ RunLoop.main.run()
   t.alike(values, [0, 1, 2], 'Swift response-stream chunks decoded in JS')
 })
 
-test('interop: Swift request-stream OPEN frame decodes in JS', { skip: isWindows }, (t) => {
+test('interop: Swift request-stream OPEN frame decodes in JS', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [
@@ -441,7 +442,7 @@ RunLoop.main.run()
   t.ok(message.stream & 0x01, 'OPEN bit is set in stream field')
 })
 
-test('interop: nil request → valid response roundtrip', { skip: isWindows }, (t) => {
+test('interop: nil request → valid response roundtrip', { skip }, (t) => {
   const schema = makeSchema()
   const hrpc = {
     handlers: [

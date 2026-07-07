@@ -6,6 +6,11 @@ const { runSwiftMultiModule } = require('./helpers/swift-multimodule')
 const { makeSchema } = require('./helpers/schema')
 const { isWindows } = require('which-runtime')
 
+const isBare = typeof Bare !== 'undefined'
+// Swift-spawning tests run on the Bare pass only (see vectors.test.js) to avoid
+// duplicating the heavy Swift build across the node and bare runs.
+const skip = !isBare || isWindows
+
 // The single-module workspace (helpers/swift.js) strips `public` and
 // `import Schema` so everything compiles in one target. That leaves the
 // shipped shape — a `public class HRPC` in its own module importing a separate
@@ -15,21 +20,18 @@ const { isWindows } = require('which-runtime')
 // roundtrip — the same consumer flow the example demonstrates, without an
 // out-of-band `npm install`.
 
-test(
-  'multimodule: public HRPC compiles against a separate Schema module',
-  { skip: isWindows },
-  (t) => {
-    const schema = makeSchema()
+test('multimodule: public HRPC compiles against a separate Schema module', { skip }, (t) => {
+  const schema = makeSchema()
 
-    const hrpc = SwiftHRPC.from(schema)
-    const rpc = hrpc.namespace('test')
-    rpc.register({
-      name: 'echo',
-      request: { name: '@test/echo-request', stream: false },
-      response: { name: '@test/echo-response', stream: false }
-    })
+  const hrpc = SwiftHRPC.from(schema)
+  const rpc = hrpc.namespace('test')
+  rpc.register({
+    name: 'echo',
+    request: { name: '@test/echo-request', stream: false },
+    response: { name: '@test/echo-response', stream: false }
+  })
 
-    const main = `
+  const main = `
 import Foundation
 import BareRPC
 import HRPC
@@ -68,8 +70,7 @@ Task {
 RunLoop.main.run()
 `
 
-    const result = runSwiftMultiModule(schema, hrpc, main)
-    t.ok(result.ok, result.stderr)
-    t.ok(result.stdout.includes('OK'), 'cross-module roundtrip printed OK')
-  }
-)
+  const result = runSwiftMultiModule(schema, hrpc, main)
+  t.ok(result.ok, result.stderr)
+  t.ok(result.stdout.includes('OK'), 'cross-module roundtrip printed OK')
+})

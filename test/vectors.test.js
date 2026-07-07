@@ -19,10 +19,12 @@ const SwiftHRPC = require('../index.js')
 const { runSwift } = require('./helpers/swift')
 const { isWindows } = require('which-runtime')
 
-// hrpc-test is Node-only (require() throws under bare), and Windows CI has no Swift
-// toolchain - skip there. Otherwise run wherever interop.test.js runs (linux + darwin).
+// Swift-spawning tests run on the Bare pass only: they build and run Swift, which
+// behaves identically regardless of the JS host, so running under both node and bare
+// would just duplicate the heavy Swift build. hrpc-test loads under Bare (>= 0.0.3).
+// Windows CI has no Swift toolchain, so skip there too.
 const isBare = typeof Bare !== 'undefined'
-const skip = isBare || isWindows
+const skip = !isBare || isWindows
 
 // Swift string literal escaping for hex/text embedded in generated drivers.
 function swiftString(s) {

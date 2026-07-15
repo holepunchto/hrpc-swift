@@ -806,6 +806,28 @@ test('throws for invalid handler name', (t) => {
   )
 })
 
+test('accepts camelCase handler names', (t) => {
+  const swift = generateSwift({
+    handlers: [
+      {
+        id: 0,
+        name: '@wdk-core/initializeWDK',
+        request: { name: 'uint', stream: false },
+        response: { name: 'uint', stream: false }
+      },
+      {
+        id: 1,
+        name: '@wdk-core/callMethod',
+        request: { name: 'uint', stream: false },
+        response: { name: 'uint', stream: false }
+      }
+    ]
+  })
+
+  t.ok(swift.includes('func initializeWDK('), 'emits camelCase method name verbatim')
+  t.ok(swift.includes('func callMethod('), 'emits second camelCase method name')
+})
+
 test('throws for request-stream handler with no response', (t) => {
   t.exception(
     () =>

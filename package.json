@@ -2,7 +2,6 @@
   "name": "hrpc-swift",
   "version": "0.2.0",
   "description": "Swift code generator for HRPC",
-  "main": "index.js",
   "exports": {
     "./package": "./package.json",
     ".": {
@@ -14,7 +13,8 @@
     "package.json",
     "index.js",
     "index.d.ts",
-    "lib/*.js"
+    "lib/*.js",
+    "NOTICE"
   ],
   "imports": {
     "fs": {

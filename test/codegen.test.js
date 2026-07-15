@@ -755,6 +755,36 @@ test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
   t.ok(Array.isArray(json.schema), 'hrpc.json has schema array')
 })
 
+test('Package.swift pins bare-rpc-swift to a semver requirement', async (t) => {
+  const tmpDir = await t.tmp()
+  const outDir = path.join(tmpDir, 'hrpc')
+
+  const hrpcJson = {
+    version: 1,
+    schema: [
+      {
+        id: 0,
+        name: '@test/hello',
+        request: { name: '@test/hello-request', stream: false },
+        response: { name: '@test/hello-response', stream: false },
+        version: 1
+      }
+    ]
+  }
+
+  const fakeHrpc = { toJSON: () => hrpcJson, handlers: hrpcJson.schema }
+
+  writeToDisk(fakeHrpc, outDir, {
+    schemaPackagePath: '../schema',
+    schemaPackageName: 'Schema',
+    schemaPackageId: 'schema'
+  })
+
+  const pkg = fs.readFileSync(path.join(outDir, 'Package.swift'), 'utf-8')
+  t.ok(pkg.includes('from: "1.0.0"'), 'pins bare-rpc-swift with a from: requirement')
+  t.absent(pkg.includes('branch: "main"'), 'no branch requirement remains')
+})
+
 test('throws for invalid handler name', (t) => {
   t.exception(
     () =>

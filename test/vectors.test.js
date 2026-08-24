@@ -84,11 +84,16 @@ func runVector(_ key: String, _ body: () throws -> Void) {
 }
 `
 
-// null and a zero-length buffer are indistinguishable on the wire (both encode
-// dataLen 0), so both fixture shapes assert only data == nil.
+// The two absent-payload shapes are distinct (hrpc-test WIRE.md, "Payload
+// handling"): a frame carrying dataLen 0 decodes to an empty buffer, while a
+// frame with no dataLen field at all - a bare stream control frame - decodes to
+// nil. A descriptor says which by carrying an empty string or null.
 function assertData(dataVar, data) {
-  if (data === null || data.length === 0) {
+  if (data === null) {
     return `try check(${dataVar} == nil, "expected nil data, got \\(String(describing: ${dataVar}))")`
+  }
+  if (data.length === 0) {
+    return `try check(${dataVar}?.isEmpty == true, "expected empty data, got \\(String(describing: ${dataVar}))")`
   }
   return `try check(${dataVar} == ${hexToDataLiteral(data)}, "data mismatch")`
 }

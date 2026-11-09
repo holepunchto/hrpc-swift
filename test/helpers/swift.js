@@ -4,6 +4,7 @@ const { spawnSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const generateSwift = require('../../lib/codegen')
+const { bareRpcSwiftDependency } = require('./schema')
 
 const WORKSPACE = path.join(__dirname, '../swift-workspace')
 const SOURCES = path.join(WORKSPACE, 'Sources')
@@ -19,9 +20,9 @@ import PackageDescription
 
 let package = Package(
   name: "HRPCTest",
-  platforms: [.macOS(.v11), .iOS(.v14)],
+  platforms: [.macOS(.v13), .iOS(.v15)],
   dependencies: [
-    .package(url: "https://github.com/holepunchto/bare-rpc-swift", branch:"main"),
+    ${bareRpcSwiftDependency()},
     .package(url: "https://github.com/holepunchto/compact-encoding-swift", branch: "main")
   ],
   targets: [

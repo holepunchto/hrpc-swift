@@ -1,6 +1,6 @@
 {
-  "name": "hrpc-swift-example",
   "private": true,
+  "name": "hrpc-swift-example",
   "dependencies": {
     "hrpc-swift": "file:..",
     "hyperschema-swift": "^0.2.0"

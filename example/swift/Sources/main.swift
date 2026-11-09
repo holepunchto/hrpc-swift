@@ -3,22 +3,16 @@ import BareRPC
 import HRPC
 import Schema
 
-// In-memory transport: routes data between two HRPC instances
-class Pipe: RPCDelegate {
-  var peer: HRPC?
-  func rpc(_ rpc: RPC, send data: Data) {
-    Task { await self.peer?.receive(data) }
-  }
-}
+let (serverInput, toServer) = AsyncStream<Data>.makeStream()
+let (clientInput, toClient) = AsyncStream<Data>.makeStream()
 
 // -- Set up server and client --
 
-let serverPipe = Pipe()
-let clientPipe = Pipe()
-let server = HRPC(delegate: serverPipe)
-let client = HRPC(delegate: clientPipe)
-serverPipe.peer = client
-clientPipe.peer = server
+// Each side reads what the other writes.
+let server = HRPC(
+  AnyTransport(serverInput, write: { toClient.yield($0) }, close: { toClient.finish() }))
+let client = HRPC(
+  AnyTransport(clientInput, write: { toServer.yield($0) }, close: { toServer.finish() }))
 
 // -- Server-side: message storage and handlers --
 

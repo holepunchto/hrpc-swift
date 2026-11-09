@@ -3,7 +3,7 @@
 const test = require('brittle')
 const SwiftHRPC = require('../index.js')
 const { runSwiftMultiModule } = require('./helpers/swift-multimodule')
-const { makeSchema } = require('./helpers/schema')
+const { makeSchema, PIPE_CLASS } = require('./helpers/schema')
 const { isWindows } = require('which-runtime')
 
 const isBare = typeof Bare !== 'undefined'
@@ -37,25 +37,14 @@ import BareRPC
 import HRPC
 import Schema
 
-class Pipe: RPCDelegate {
-  var peer: HRPC?
-  private var pendingDelivery: Task<Void, Never> = Task {}
-  func rpc(_ rpc: RPC, send data: Data) {
-    let peer = self.peer
-    let prev = pendingDelivery
-    pendingDelivery = Task {
-      await prev.value
-      await peer?.receive(data)
-    }
-  }
-}
+${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onEcho { req in
   return EchoResponse(value: req!.value * 2)

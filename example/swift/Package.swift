@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
   name: "ChatExample",
-  platforms: [.macOS(.v11), .iOS(.v14)],
+  platforms: [.macOS(.v13), .iOS(.v15)],
   dependencies: [
     .package(path: "schema"),
     .package(path: "hrpc"),

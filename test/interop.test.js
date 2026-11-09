@@ -3,7 +3,7 @@
 const test = require('brittle')
 const c = require('compact-encoding')
 const { runSwift } = require('./helpers/swift')
-const { makeSchema, PIPE_CLASS } = require('./helpers/schema')
+const { makeSchema, PIPE_CLASS, PRINT_FIRST_FRAME_STRUCT } = require('./helpers/schema')
 const m = require('bare-rpc/messages')
 const { isWindows } = require('which-runtime')
 
@@ -18,6 +18,14 @@ function encodeRequestFrame(id, command, payloadBuffer) {
   const message = { type: 1, id, command, stream: 0, data: payloadBuffer }
   const header = c.encode(m.header, message)
   return payloadBuffer ? Buffer.concat([header, payloadBuffer]) : Buffer.from(header)
+}
+
+// The ack of a requester that reads the reply as a stream: STREAM with
+// RESPONSE | OPEN, which a JS requester sends as soon as it creates the stream.
+function encodeResponseOpenFrame(id) {
+  return Buffer.from(
+    c.encode(m.header, { type: 3, id, stream: 0x200 | 0x1, error: null, data: null })
+  )
 }
 
 // Events are request frames (type 1) with id 0
@@ -84,7 +92,7 @@ import BareRPC
 ${PIPE_CLASS}
 
 let pipe = Pipe()
-let hrpc = HRPC(delegate: pipe)
+let hrpc = HRPC(pipe)
 
 hrpc.onNotify { req in
   precondition(req!.code == 42, "expected code 42, got \\(req!.code)")
@@ -93,7 +101,7 @@ hrpc.onNotify { req in
 }
 
 let data = Data(base64Encoded: "${base64}")!
-Task { await hrpc.receive(data) }
+pipe.receive(data)
 RunLoop.main.run()
 `
 
@@ -126,7 +134,7 @@ import BareRPC
 ${PIPE_CLASS}
 
 let pipe = Pipe()
-let hrpc = HRPC(delegate: pipe)
+let hrpc = HRPC(pipe)
 
 hrpc.onNotify { req in
   precondition(req == nil, "expected nil args, got \\(String(describing: req))")
@@ -135,7 +143,7 @@ hrpc.onNotify { req in
 }
 
 let data = Data(base64Encoded: "${base64}")!
-Task { await hrpc.receive(data) }
+pipe.receive(data)
 RunLoop.main.run()
 `
 
@@ -169,7 +177,7 @@ ${PIPE_CLASS}
 
 let pipe = Pipe()
 pipe.captureMode = true
-let hrpc = HRPC(delegate: pipe)
+let hrpc = HRPC(pipe)
 
 hrpc.onEcho { req in
   precondition(req!.value == 7, "expected value 7, got \\(req!.value)")
@@ -177,7 +185,7 @@ hrpc.onEcho { req in
 }
 
 let data = Data(base64Encoded: "${base64}")!
-Task { await hrpc.receive(data) }
+pipe.receive(data)
 
 Task {
   try await Task.sleep(nanoseconds: 500_000_000)
@@ -224,7 +232,7 @@ ${PIPE_CLASS}
 
 let pipe = Pipe()
 pipe.captureMode = true
-let hrpc = HRPC(delegate: pipe)
+let hrpc = HRPC(pipe)
 
 Task {
   try await hrpc.notify(NotifyRequest(code: 77))
@@ -261,19 +269,12 @@ test('interop: Swift duplex OPEN frame decodes in JS', { skip }, (t) => {
     ]
   }
 
-  // Custom delegate: print the first frame sent and exit immediately — no sleep needed.
   const main = `
 import Foundation
 import BareRPC
 
-class PrintOnSend: RPCDelegate {
-  func rpc(_ rpc: RPC, send data: Data) {
-    print(data.base64EncodedString())
-    exit(0)
-  }
-}
-
-let hrpc = HRPC(delegate: PrintOnSend())
+${PRINT_FIRST_FRAME_STRUCT}
+let hrpc = HRPC(PrintFirstFrame())
 Task { try? await hrpc.pipe { _, _ in } }
 RunLoop.main.run()
 `
@@ -311,7 +312,7 @@ ${PIPE_CLASS}
 
 let pipe = Pipe()
 pipe.captureMode = true
-let hrpc = HRPC(delegate: pipe)
+let hrpc = HRPC(pipe)
 
 Task {
   _ = try? await hrpc.echo(EchoRequest(value: 55))
@@ -353,7 +354,7 @@ test('interop: JS request → Swift response-stream chunks → JS decode', { ski
   }
 
   const payload = Buffer.from(c.encode(echoRequestCodec, { value: 3 }))
-  const frame = encodeRequestFrame(1, 0, payload)
+  const frame = Buffer.concat([encodeResponseOpenFrame(1), encodeRequestFrame(1, 0, payload)])
   const base64 = frame.toString('base64')
 
   const main = `
@@ -364,17 +365,17 @@ ${PIPE_CLASS}
 
 let pipe = Pipe()
 pipe.captureMode = true
-let hrpc = HRPC(delegate: pipe)
+let hrpc = HRPC(pipe)
 
 hrpc.onFeed { req, stream in
   for i: UInt in 0..<(req?.value ?? 0) {
-    await stream.write(try encode(echoResponse, EchoResponse(value: i)))
+    try await stream.write(try encode(echoResponse, EchoResponse(value: i)))
   }
   await stream.end()
 }
 
 let data = Data(base64Encoded: "${base64}")!
-Task { await hrpc.receive(data) }
+pipe.receive(data)
 
 Task {
   try await Task.sleep(nanoseconds: 500_000_000)
@@ -418,14 +419,8 @@ test('interop: Swift request-stream OPEN frame decodes in JS', { skip }, (t) => 
 import Foundation
 import BareRPC
 
-class PrintOnSend: RPCDelegate {
-  func rpc(_ rpc: RPC, send data: Data) {
-    print(data.base64EncodedString())
-    exit(0)
-  }
-}
-
-let hrpc = HRPC(delegate: PrintOnSend())
+${PRINT_FIRST_FRAME_STRUCT}
+let hrpc = HRPC(PrintFirstFrame())
 Task { try? await hrpc.collect { _ in } }
 RunLoop.main.run()
 `
@@ -463,10 +458,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onEcho { req in
   precondition(req == nil, "expected nil args, got \\(String(describing: req))")

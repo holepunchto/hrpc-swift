@@ -30,10 +30,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onEcho { req in
   precondition(req!.value == 21, "server got wrong value: \\(req!.value)")
@@ -75,10 +75,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onNotify { req in
   precondition(req!.code == 99, "server got wrong code: \\(req!.code)")
@@ -124,10 +124,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 var notifyReceived = false
 
@@ -179,10 +179,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onEcho { req in
   return EchoResponse(value: req!.value)
@@ -213,7 +213,7 @@ import BareRPC
 ${PIPE_CLASS}
 
 let pipeA = Pipe()
-let client = HRPC(delegate: pipeA)
+let client = HRPC(pipeA)
 print("OK")
 exit(0)
 `
@@ -244,10 +244,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onEcho { req in
   precondition(req == nil, "expected nil args, got \\(String(describing: req))")
@@ -287,10 +287,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onNotify { req in
   precondition(req == nil, "expected nil args, got \\(String(describing: req))")
@@ -330,10 +330,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onDouble { req in
   return req! * 2
@@ -377,14 +377,14 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onFeed { req, stream in
   for i: UInt in 0..<(req?.value ?? 0) {
-    await stream.write(try encode(echoResponse, EchoResponse(value: i)))
+    try await stream.write(try encode(echoResponse, EchoResponse(value: i)))
   }
   await stream.end()
 }
@@ -433,10 +433,10 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onCollect { stream in
   var total: UInt = 0
@@ -449,8 +449,8 @@ server.onCollect { stream in
 
 Task {
   let response = try await client.collect { stream in
-    await stream.write(try encode(echoRequest, EchoRequest(value: 10)))
-    await stream.write(try encode(echoRequest, EchoRequest(value: 32)))
+    try await stream.write(try encode(echoRequest, EchoRequest(value: 10)))
+    try await stream.write(try encode(echoRequest, EchoRequest(value: 32)))
   }
   precondition(response?.value == 42, "expected 42, got \\(String(describing: response?.value))")
   print("OK")
@@ -467,7 +467,7 @@ RunLoop.main.run()
 
 // --- JS-level tests (no Swift compilation needed) ---
 
-test('uses delegate forwarder instead of closure wiring', (t) => {
+test('wires the RPC to a dispatcher over a transport', (t) => {
   const hrpc = {
     handlers: [
       {
@@ -486,14 +486,13 @@ test('uses delegate forwarder instead of closure wiring', (t) => {
   }
 
   const swift = generateSwift(hrpc)
-  t.ok(swift.includes('_HRPCDelegateForwarder'), 'emits forwarder class')
-  t.ok(swift.includes('public func receive(_ data: Data) async {'), 'receive is async')
-  t.absent(swift.includes('onRequest ='), 'no closure wiring for requests')
-  t.absent(swift.includes('onEvent ='), 'no closure wiring for events')
-  t.ok(swift.includes('await req.reject('), 'dispatch uses await on reject')
-  t.ok(swift.includes('await req.reply('), 'dispatch uses await on reply')
-  t.ok(swift.includes('let transport: any RPCDelegate'), 'transport is a strong let')
-  t.ok(swift.includes('didFailWith error: Error'), 'forwarder forwards didFailWith')
+  t.ok(swift.includes('private final class _HRPCDispatcher'), 'emits dispatcher class')
+  t.ok(swift.includes('public init(_ transport: some Transport)'), 'takes a transport')
+  t.ok(swift.includes('_HRPCDispatcher: Handler'), 'dispatcher is a handler')
+  t.ok(swift.includes('RPC(transport, handler: dispatcher)'), 'wires the dispatcher')
+  t.ok(swift.includes('try await req.reply('), 'dispatch replies')
+  t.ok(swift.includes('code: "HANDLER_ERROR")'), 'dispatch throws handler errors with a code')
+  t.absent(swift.includes('RPCDelegate'), 'no delegate')
   t.ok(swift.includes('(EchoRequest?) async throws'), 'request handler takes optional arg')
   t.ok(swift.includes('(NotifyRequest?) async'), 'event handler takes optional arg')
 })
@@ -602,22 +601,22 @@ ${PIPE_CLASS}
 
 let pipeA = Pipe()
 let pipeB = Pipe()
-let client = HRPC(delegate: pipeA)
-let server = HRPC(delegate: pipeB)
-pipeA.peer = server
-pipeB.peer = client
+let client = HRPC(pipeA)
+let server = HRPC(pipeB)
+pipeA.peer = pipeB
+pipeB.peer = pipeA
 
 server.onPipe { incoming, outgoing in
   for try await chunk in incoming {
-    await outgoing.write(chunk)
+    try await outgoing.write(chunk)
   }
   await outgoing.end()
 }
 
 Task {
   try await client.pipe { outgoing, incoming in
-    await outgoing.write(try encode(echoRequest, EchoRequest(value: 10)))
-    await outgoing.write(try encode(echoRequest, EchoRequest(value: 32)))
+    try await outgoing.write(try encode(echoRequest, EchoRequest(value: 10)))
+    try await outgoing.write(try encode(echoRequest, EchoRequest(value: 32)))
     await outgoing.end()
     var total: UInt = 0
     for try await chunk in incoming {
@@ -741,7 +740,7 @@ test('toDisk writes hrpc.json, HRPC.swift, and Package.swift', async (t) => {
   t.ok(fs.existsSync(path.join(outDir, 'Package.swift')), 'Package.swift exists')
 
   const swift = fs.readFileSync(path.join(outDir, 'Sources', 'HRPC.swift'), 'utf-8')
-  t.ok(swift.includes('public class HRPC'), 'HRPC.swift has class definition')
+  t.ok(swift.includes('public final class HRPC'), 'HRPC.swift has class definition')
   t.ok(swift.includes('case 0:'), 'HRPC.swift has dispatch for command 0')
 
   const pkg = fs.readFileSync(path.join(outDir, 'Package.swift'), 'utf-8')
@@ -781,7 +780,7 @@ test('Package.swift pins bare-rpc-swift to a semver requirement', async (t) => {
   })
 
   const pkg = fs.readFileSync(path.join(outDir, 'Package.swift'), 'utf-8')
-  t.ok(pkg.includes('from: "1.0.0"'), 'pins bare-rpc-swift with a from: requirement')
+  t.ok(pkg.includes('from: "2.0.0"'), 'pins bare-rpc-swift with a from: requirement')
   t.absent(pkg.includes('branch: "main"'), 'no branch requirement remains')
 })
 
@@ -912,25 +911,7 @@ test('throws for Swift keyword as method name', (t) => {
   )
 })
 
-test('response-stream dispatch rejects when createResponseStream returns nil', (t) => {
-  const hrpc = {
-    handlers: [
-      {
-        id: 0,
-        name: '@test/feed',
-        request: { name: 'uint', stream: false },
-        response: { name: 'uint', stream: true }
-      }
-    ]
-  }
-  const swift = generateSwift(hrpc)
-  t.ok(
-    swift.includes('req.reject("Stream already open"'),
-    'nil createResponseStream path calls req.reject'
-  )
-})
-
-test('event dispatch decode error forwards to delegate rather than swallowing', (t) => {
+test('event dispatch decode error fails the session rather than being swallowed', (t) => {
   const hrpc = {
     handlers: [
       {
@@ -943,7 +924,8 @@ test('event dispatch decode error forwards to delegate rather than swallowing', 
   }
   const swift = generateSwift(hrpc)
   t.ok(
-    swift.includes('_forwarder.transport.rpc(_rpc, didFailWith: error)'),
-    'decode error forwarded to delegate'
+    swift.includes('func handle(_ event: IncomingEvent) async throws {') &&
+      swift.includes('let args: NotifyRequest? = try _decodeOptional('),
+    'decode error is thrown to the session'
   )
 })

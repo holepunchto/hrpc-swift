@@ -36,6 +36,7 @@
     "hrpc": "^4.3.0"
   },
   "devDependencies": {
+    "bare-env": "^3.0.1",
     "bare-rpc": "^1.2.0",
     "bare-subprocess": "^5.2.3",
     "brittle": "^3.19.0",

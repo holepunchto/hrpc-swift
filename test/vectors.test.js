@@ -133,9 +133,8 @@ function decodeBody(hex, descriptor) {
     lines.push(`try check(resp.stream == ${descriptor.stream}, "stream mismatch: \\(resp.stream)")`)
     if (descriptor.error) {
       lines.push(
-        'guard case .remoteError(let message, let code, let errno) = resp.result else { throw CheckError.failed("expected remoteError, got \\(resp.result)") }'
+        'guard case .remoteError(let respError) = resp.result else { throw CheckError.failed("expected remoteError, got \\(resp.result)") }'
       )
-      lines.push('let respError = RPCRemoteError(message: message, code: code, errno: errno)')
       lines.push(assertError('respError', descriptor.error))
     } else {
       lines.push(

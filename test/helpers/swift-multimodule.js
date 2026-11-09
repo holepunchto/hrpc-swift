@@ -5,6 +5,7 @@ const path = require('path')
 const fs = require('fs')
 const SwiftHyperschema = require('hyperschema-swift')
 const SwiftHRPC = require('../../index.js')
+const { bareRpcSwiftLocalPath, bareRpcSwiftDependency } = require('./schema')
 
 const WORKSPACE = path.join(__dirname, '../swift-multimodule-workspace')
 const TIMEOUT = 120000
@@ -22,11 +23,11 @@ import PackageDescription
 
 let package = Package(
   name: "HRPCMultiModule",
-  platforms: [.macOS(.v11), .iOS(.v14)],
+  platforms: [.macOS(.v13), .iOS(.v15)],
   dependencies: [
     .package(path: "schema"),
     .package(path: "hrpc"),
-    .package(url: "https://github.com/holepunchto/bare-rpc-swift", branch: "main")
+    ${bareRpcSwiftDependency()}
   ],
   targets: [
     .executableTarget(
@@ -62,6 +63,15 @@ function runSwiftMultiModule(schema, hrpc, mainSwift) {
     schemaPackageName: 'Schema',
     schemaPackageId: 'schema'
   })
+
+  if (bareRpcSwiftLocalPath()) {
+    const hrpcPackage = path.join(WORKSPACE, 'hrpc', 'Package.swift')
+    const generated = fs.readFileSync(hrpcPackage, 'utf-8')
+    fs.writeFileSync(
+      hrpcPackage,
+      generated.replace(/\.package\(url: "[^"]*bare-rpc-swift"[^)]*\)/, bareRpcSwiftDependency())
+    )
+  }
 
   fs.writeFileSync(path.join(execSources, 'main.swift'), mainSwift, { encoding: 'utf-8' })
   fs.writeFileSync(path.join(WORKSPACE, 'Package.swift'), EXECUTABLE_PACKAGE_SWIFT, {
